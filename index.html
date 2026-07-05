@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vanilla JS WebGL Ray Tracer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #111;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #eee;
+        }
+        canvas { display: block; cursor: grab; }
+        canvas:active { cursor: grabbing; }
+
+        #ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(20, 20, 25, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            width: 260px;
+            max-height: 90vh;
+            overflow-y: auto;
+            z-index: 10;
+        }
+
+        #ui h2 {
+            margin: 0 0 15px 0;
+            font-size: 16px;
+            text-align: center;
+            color: #fff;
+            border-bottom: 1px solid #444;
+            padding-bottom: 8px;
+        }
+
+        .obj-group {
+            margin-bottom: 15px;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .obj-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #4af;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+
+        .control-row label {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .control-row input[type="range"] {
+            flex: 1.5;
+            cursor: pointer;
+        }
+
+        .control-row input[type="color"] {
+            width: 40px;
+            height: 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+        }
+
+        .val-display {
+            width: 35px;
+            text-align: right;
+            font-family: monospace;
+            color: #aaa;
+        }
+
+        #info {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            font-size: 11px;
+            color: #666;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <h2>Material Editor</h2>
+        <div id="controls"></div>
+    </div>
+    <div id="info">Drag to Orbit | Scroll to Zoom</div>
+
+    <canvas id="canvas"></canvas>
+
+    <script id="vertexShader" type="x-shader/x-vertex">#version 300 es
+        in vec2 aPos;
+        void main() {
+            gl_Position = vec4(aPos, 0.0, 1.0);
+        }
+    </script>
+
+    <script id="fragmentShader" type="x-shader/x-fragment">#version 300 es
+        precision highp float;
+        
+        out vec4 FragColor;
+        
+        #define MAX_BOUNCES 4
+        #define PI 3.14159265
+
+        uniform vec2 uResolution;
+        uniform float uTime;
+        uniform vec3 uCamPos;
+        uniform vec3 uCamTarget;
+
+        // Object Uniforms
+        uniform vec3 uSpherePos;    uniform vec4 uSphereMat;    // Mat: rgb, refl
+        uniform vec4 uSphereProps;  // Props: rough, transp, ior, unused
+        
+        uniform vec3 uCubePos;      uniform vec4 uCubeMat;
+        uniform vec4 uCubeProps;
+        
+        uniform vec3 uPyrPos;       uniform vec4 uPyrMat;
+        uniform vec4 uPyrProps;
+
+        struct Material {
+            vec3 albedo;
+            float reflectivity;
+            float roughness;
+            float transparency;
+            float ior;
+        };
+
+        struct Hit {
+            float t;
+            vec3 normal;
+            Material mat;
+            bool isHit;
+        };
+
+        // --- HASH & NOISE for Roughness ---
+        float hash(vec2 p) {
+            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+        }
+
+        // --- INTERSECTION FUNCTIONS ---
+        float intersectSphere(vec3 ro, vec3 rd, vec3 ce, float ra) {
+            vec3 oc = ro - ce;
+            float b = dot(oc, rd);
+            float c = dot(oc, oc) - ra*ra;
+            float h = b*b - c;
+            if(h < 0.0) return -1.0;
+            h = sqrt(h);
+            float t = -b - h;
+            if(t < 0.001) t = -b + h;
+            return t < 0.001 ? -1.0 : t;
+        }
+
+        // Axis-Aligned Cube Intersection
+        float intersectCube(vec3 ro, vec3 rd, vec3 minBox, vec3 maxBox) {
+            vec3 tMin = (minBox - ro) / rd;
+            vec3 tMax = (maxBox - ro) / rd;
+            vec3 t1 = min(tMin, tMax);
+            vec3 t2 = max(tMin, tMax);
+            float tNear = max(max(t1.x, t1.y), t1.z);
+            float tFar = min(min(t2.x, t2.y), t2.z);
+            if(tNear > tFar || tFar < 0.001) return -1.0;
+            return tNear > 0.001 ? tNear : tFar;
+        }
+
+        vec3 getCubeNormal(vec3 p, vec3 minBox, vec3 maxBox) {
+            vec3 c = (minBox + maxBox) * 0.5;
+            vec3 d = (p - c) / ((maxBox - minBox) * 0.5);
+            vec3 absD = abs(d);
+            if (absD.x > absD.y && absD.x > absD.z) return vec3(sign(d.x), 0.0, 0.0);
+            if (absD.y > absD.z) return vec3(0.0, sign(d.y), 0.0);
+            return vec3(0.0, 0.0, sign(d.z));
+        }
+
+        // Triangle Intersection (For Pyramid)
+        float intersectTri(vec3 ro, vec3 rd, vec3 v0, vec3 v1, vec3 v2, out vec3 normal) {
+            vec3 v1v0 = v1 - v0;
+            vec3 v2v0 = v2 - v0;
+            vec3 rov0 = ro - v0;
+            vec3 n = cross(v1v0, v2v0);
+            vec3 q = cross(rov0, rd);
+            float d = 1.0 / dot(rd, n);
+            float u = d * dot(-q, v2v0);
+            float v = d * dot(q, v1v0);
+            float t = d * dot(-n, rov0);
+            if (u < 0.0 || v < 0.0 || (u+v) > 1.0 || t < 0.001) return -1.0;
+            
+            normal = normalize(n);
+            if (dot(normal, rd) > 0.0) normal = -normal; // Face forward
+            return t;
+        }
+
+        // Square-based Pyramid
+        float intersectPyramid(vec3 ro, vec3 rd, vec3 center, float size, float height, out vec3 normal) {
+            float bestT = 1e9;
+            vec3 bestN = vec3(0.0);
+            float t;
+            vec3 n;
+            
+            vec3 v0 = center + vec3(-size, 0.0, -size);
+            vec3 v1 = center + vec3( size, 0.0, -size);
+            vec3 v2 = center + vec3( size, 0.0,  size);
+            vec3 v3 = center + vec3(-size, 0.0,  size);
+            vec3 apex = center + vec3(0.0, height, 0.0);
+            
+            t = intersectTri(ro, rd, v0, v1, apex, n); if (t > 0.0 && t < bestT) { bestT = t; bestN = n; }
+            t = intersectTri(ro, rd, v1, v2, apex, n); if (t > 0.0 && t < bestT) { bestT = t; bestN = n; }
+            t = intersectTri(ro, rd, v2, v3, apex, n); if (t > 0.0 && t < bestT) { bestT = t; bestN = n; }
+            t = intersectTri(ro, rd, v3, v0, apex, n); if (t > 0.0 && t < bestT) { bestT = t; bestN = n; }
+            
+            normal = bestN;
+            return bestT < 1e9 ? bestT : -1.0;
+        }
+
+        // Plane Intersection (Ground)
+        float intersectPlane(vec3 ro, vec3 rd, float y) {
+            if (abs(rd.y) < 0.001) return -1.0;
+            float t = (y - ro.y) / rd.y;
+            return t > 0.001 ? t : -1.0;
+        }
+
+        // --- SCENE INTERSECTION ---
+        Hit intersectScene(vec3 ro, vec3 rd) {
+            Hit hit;
+            hit.t = 1e9;
+            hit.isHit = false;
+
+            // Ground
+            float tGround = intersectPlane(ro, rd, 0.0);
+            if (tGround > 0.0 && tGround < hit.t) {
+                hit.t = tGround;
+                hit.isHit = true;
+                hit.normal = vec3(0.0, 1.0, 0.0);
+                vec3 p = ro + rd * tGround;
+                float check = mod(floor(p.x) + floor(p.z), 2.0);
+                hit.mat.albedo = mix(vec3(0.9), vec3(0.1), check);
+                hit.mat.reflectivity = 0.2;
+                hit.mat.roughness = 0.0;
+                hit.mat.transparency = 0.0;
+                hit.mat.ior = 1.0;
+            }
+
+            // Sphere
+            float tSphere = intersectSphere(ro, rd, uSpherePos, 1.0);
+            if (tSphere > 0.0 && tSphere < hit.t) {
+                hit.t = tSphere;
+                hit.isHit = true;
+                vec3 p = ro + rd * tSphere;
+                hit.normal = normalize(p - uSpherePos);
+                hit.mat.albedo = uSphereMat.rgb;
+                hit.mat.reflectivity = uSphereMat.w;
+                hit.mat.roughness = uSphereProps.x;
+                hit.mat.transparency = uSphereProps.y;
+                hit.mat.ior = uSphereProps.z;
+            }
+
+            // Cube
+            vec3 cubeMin = uCubePos - vec3(1.0);
+            vec3 cubeMax = uCubePos + vec3(1.0);
+            float tCube = intersectCube(ro, rd, cubeMin, cubeMax);
+            if (tCube > 0.0 && tCube < hit.t) {
+                hit.t = tCube;
+                hit.isHit = true;
+                vec3 p = ro + rd * tCube;
+                hit.normal = getCubeNormal(p, cubeMin, cubeMax);
+                hit.mat.albedo = uCubeMat.rgb;
+                hit.mat.reflectivity = uCubeMat.w;
+                hit.mat.roughness = uCubeProps.x;
+                hit.mat.transparency = uCubeProps.y;
+                hit.mat.ior = uCubeProps.z;
+            }
+
+            // Pyramid
+            vec3 pyrN;
+            float tPyr = intersectPyramid(ro, rd, uPyrPos, 1.0, 2.0, pyrN);
+            if (tPyr > 0.0 && tPyr < hit.t) {
+                hit.t = tPyr;
+                hit.isHit = true;
+                hit.normal = pyrN;
+                hit.mat.albedo = uPyrMat.rgb;
+                hit.mat.reflectivity = uPyrMat.w;
+                hit.mat.roughness = uPyrProps.x;
+                hit.mat.transparency = uPyrProps.y;
+                hit.mat.ior = uPyrProps.z;
+            }
+
+            return hit;
+        }
+
+        // Shadow check (simplified, ignores transparency for performance)
+        bool inShadow(vec3 ro, vec3 rd, float maxDist) {
+            if (intersectSphere(ro, rd, uSpherePos, 1.0) > 0.0 && intersectSphere(ro, rd, uSpherePos, 1.0) < maxDist) return true;
+            
+            vec3 cubeMin = uCubePos - vec3(1.0);
+            vec3 cubeMax = uCubePos + vec3(1.0);
+            if (intersectCube(ro, rd, cubeMin, cubeMax) > 0.0 && intersectCube(ro, rd, cubeMin, cubeMax) < maxDist) return true;
+            
+            vec3 pyrN;
+            if (intersectPyramid(ro, rd, uPyrPos, 1.0, 2.0, pyrN) > 0.0 && intersectPyramid(ro, rd, uPyrPos, 1.0, 2.0, pyrN) < maxDist) return true;
+            
+            return false;
+        }
+
+        vec3 skyColor(vec3 rd) {
+            float t = 0.5 * (rd.y + 1.0);
+            vec3 horizon = vec3(1.0, 1.0, 1.0);
+            vec3 zenith = vec3(0.2, 0.5, 0.9);
+            vec3 sky = mix(horizon, zenith, t);
+            
+            // Sun
+            vec3 sunDir = normalize(vec3(1.0, 0.8, -0.5));
+            float sun = max(dot(rd, sunDir), 0.0);
+            sky += vec3(1.0, 0.8, 0.4) * pow(sun, 128.0) * 2.0; // Sun disk
+            sky += vec3(1.0, 0.8, 0.4) * pow(sun, 8.0) * 0.3; // Sun glow
+            
+            return sky;
+        }
+
+        // --- RAY TRACER ---
+        vec3 trace(vec3 ro, vec3 rd) {
+            vec3 col = vec3(0.0);
+            vec3 throughput = vec3(1.0);
+            
+            for(int i=0; i<MAX_BOUNCES; i++) {
+                Hit hit = intersectScene(ro, rd);
+                
+                if (!hit.isHit) {
+                    col += throughput * skyColor(rd);
+                    break;
+                }
+                
+                vec3 p = ro + rd * hit.t;
+                vec3 n = hit.normal;
+                
+                // Lighting (Sun + Ambient Sky)
+                vec3 lightDir = normalize(vec3(1.0, 0.8, -0.5));
+                float diff = max(dot(n, lightDir), 0.0);
+                
+                bool shadowed = inShadow(p + n * 0.01, lightDir, 50.0);
+                float shadow = shadowed ? 0.1 : 1.0;
+                
+                vec3 skyAmb = skyColor(n) * 0.3; // Ambient light from sky
+                vec3 directLight = hit.mat.albedo * (diff * shadow * vec3(1.0, 0.95, 0.8) + skyAmb);
+                
+                col += throughput * directLight * (1.0 - hit.mat.reflectivity - hit.mat.transparency);
+                
+                // Russian Roulette / Material Decision
+                float rand = hash(gl_FragCoord.xy + uTime + float(i) * 10.0);
+                
+                if (hit.mat.transparency > 0.0 && rand < hit.mat.transparency) {
+                    // Refraction / Transmission
+                    throughput *= hit.mat.albedo;
+                    float eta = dot(rd, n) < 0.0 ? 1.0 / hit.mat.ior : hit.mat.ior;
+                    vec3 refr = refract(rd, n, eta);
+                    if (length(refr) < 0.01) refr = reflect(rd, n); // Total internal reflection
+                    ro = p - n * 0.01;
+                    rd = normalize(refr);
+                } else if (hit.mat.reflectivity > 0.0 && rand < hit.mat.reflectivity + hit.mat.transparency) {
+                    // Reflection
+                    throughput *= hit.mat.albedo;
+                    vec3 refl = reflect(rd, n);
+                    // Add roughness by jittering the reflection vector
+                    vec3 jitter = vec3(hash(p.xy + i), hash(p.yz + i), hash(p.zx + i)) - 0.5;
+                    refl = normalize(refl + jitter * hit.mat.roughness);
+                    ro = p + n * 0.01;
+                    rd = refl;
+                } else {
+                    // Diffuse bounce (absorbed for simplicity)
+                    break;
+                }
+            }
+            return col;
+        }
+
+        void main() {
+            vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
+            
+            // Camera Setup
+            vec3 ro = uCamPos;
+            vec3 forward = normalize(uCamTarget - ro);
+            vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
+            vec3 up = cross(right, forward);
+            
+            vec3 rd = normalize(forward + uv.x * right + uv.y * up);
+            
+            vec3 col = trace(ro, rd);
+            
+            // Tone Mapping & Gamma Correction
+            col = col / (col + 1.0); // Reinhard tone mapping
+            col = pow(col, vec3(1.0/2.2)); // Gamma
+            
+            FragColor = vec4(col, 1.0);
+        }
+    </script>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const gl = canvas.getContext('webgl2');
+        if (!gl) { alert("WebGL2 not supported!"); }
+
+        // Resize canvas
+        function resize() {
+            // Render at slightly lower resolution for performance if needed, 
+            // but 1.0 is usually fine for simple scenes. Let's use 0.8 for speed.
+            const scale = 0.8; 
+            canvas.width = window.innerWidth * scale;
+            canvas.height = window.innerHeight * scale;
+            canvas.style.width = window.innerWidth + 'px';
+            canvas.style.height = window.innerHeight + 'px';
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- SHADER COMPILATION ---
+        function compileShader(src, type) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, src);
+            gl.compileShader(shader);
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error(gl.getShaderInfoLog(shader));
+            }
+            return shader;
+        }
+
+        const vs = compileShader(document.getElementById('vertexShader').textContent, gl.VERTEX_SHADER);
+        const fs = compileShader(document.getElementById('fragmentShader').textContent, gl.FRAGMENT_SHADER);
+
+        const program = gl.createProgram();
+        gl.attachShader(program, vs);
+        gl.attachShader(program, fs);
+        gl.linkProgram(program);
+        gl.useProgram(program);
+
+        // Fullscreen Quad
+        const verts = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+        const vbo = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+        gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+        
+        const aPosLoc = gl.getAttribLocation(program, 'aPos');
+        gl.enableVertexAttribArray(aPosLoc);
+        gl.vertexAttribPointer(aPosLoc, 2, gl.FLOAT, false, 0, 0);
+
+        // Uniform Locations
+        const u = {
+            res: gl.getUniformLocation(program, 'uResolution'),
+            time: gl.getUniformLocation(program, 'uTime'),
+            camPos: gl.getUniformLocation(program, 'uCamPos'),
+            camTarget: gl.getUniformLocation(program, 'uCamTarget'),
+            
+            sPos: gl.getUniformLocation(program, 'uSpherePos'),
+            sMat: gl.getUniformLocation(program, 'uSphereMat'),
+            sProps: gl.getUniformLocation(program, 'uSphereProps'),
+            
+            cPos: gl.getUniformLocation(program, 'uCubePos'),
+            cMat: gl.getUniformLocation(program, 'uCubeMat'),
+            cProps: gl.getUniformLocation(program, 'uCubeProps'),
+            
+            pPos: gl.getUniformLocation(program, 'uPyrPos'),
+            pMat: gl.getUniformLocation(program, 'uPyrMat'),
+            pProps: gl.getUniformLocation(program, 'uPyrProps')
+        };
+
+        // --- STATE MANAGEMENT ---
+        const state = {
+            Sphere: { pos: [0, 1, 0], color: '#ff5555', refl: 0.8, rough: 0.0, transp: 0.0, ior: 1.5 },
+            Cube:   { pos: [3, 1, 0], color: '#55ff55', refl: 0.2, rough: 0.3, transp: 0.0, ior: 1.5 },
+            Pyramid:{ pos: [-3, 0, 0], color: '#5555ff', refl: 0.5, rough: 0.1, transp: 0.0, ior: 1.5 }
+        };
+
+        // Helper to convert hex to rgb 0-1
+        function hexToRgb(hex) {
+            let r = parseInt(hex.slice(1, 3), 16) / 255;
+            let g = parseInt(hex.slice(3, 5), 16) / 255;
+            let b = parseInt(hex.slice(5, 7), 16) / 255;
+            return [r, g, b];
+        }
+
+        // --- UI GENERATION ---
+        const controlsDiv = document.getElementById('controls');
+        
+        function buildUI() {
+            controlsDiv.innerHTML = '';
+            for (const objName in state) {
+                const obj = state[objName];
+                const group = document.createElement('div');
+                group.className = 'obj-group';
+                group.innerHTML = `
+                    <h3>${objName}</h3>
+                    
+                    <div class="control-row">
+                        <label>Color</label>
+                        <input type="color" value="${obj.color}" data-obj="${objName}" data-prop="color">
+                    </div>
+                    <div class="control-row">
+                        <label>Pos X</label>
+                        <input type="range" min="-5" max="5" step="0.1" value="${obj.pos[0]}" data-obj="${objName}" data-prop="pos" data-idx="0">
+                        <span class="val-display">${obj.pos[0].toFixed(1)}</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Pos Y</label>
+                        <input type="range" min="0" max="5" step="0.1" value="${obj.pos[1]}" data-obj="${objName}" data-prop="pos" data-idx="1">
+                        <span class="val-display">${obj.pos[1].toFixed(1)}</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Pos Z</label>
+                        <input type="range" min="-5" max="5" step="0.1" value="${obj.pos[2]}" data-obj="${objName}" data-prop="pos" data-idx="2">
+                        <span class="val-display">${obj.pos[2].toFixed(1)}</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Reflectivity</label>
+                        <input type="range" min="0" max="1" step="0.01" value="${obj.refl}" data-obj="${objName}" data-prop="refl">
+                        <span class="val-display">${obj.refl.toFixed(2)}</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Roughness</label>
+                        <input type="range" min="0" max="1" step="0.01" value="${obj.rough}" data-obj="${objName}" data-prop="rough">
+                        <span class="val-display">${obj.rough.toFixed(2)}</span>
+                    </div>
+                    <div class="control-row">
+                        <label>Transparency</label>
+                        <input type="range" min="0" max="1" step="0.01" value="${obj.transp}" data-obj="${objName}" data-prop="transp">
+                        <span class="val-display">${obj.transp.toFixed(2)}</span>
+                    </div>
+                    <div class="control-row">
+                        <label>IOR</label>
+                        <input type="range" min="1.0" max="2.5" step="0.01" value="${obj.ior}" data-obj="${objName}" data-prop="ior">
+                        <span class="val-display">${obj.ior.toFixed(2)}</span>
+                    </div>
+                `;
+                controlsDiv.appendChild(group);
+            }
+
+            // Attach listeners
+            document.querySelectorAll('input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const target = e.target;
+                    const objName = target.dataset.obj;
+                    const prop = target.dataset.prop;
+                    const valDisplay = target.nextElementSibling;
+                    
+                    if (prop === 'color') {
+                        state[objName][prop] = target.value;
+                    } else if (prop === 'pos') {
+                        const idx = parseInt(target.dataset.idx);
+                        state[objName][prop][idx] = parseFloat(target.value);
+                        if(valDisplay) valDisplay.textContent = parseFloat(target.value).toFixed(1);
+                    } else {
+                        state[objName][prop] = parseFloat(target.value);
+                        if(valDisplay) valDisplay.textContent = parseFloat(target.value).toFixed(2);
+                    }
+                });
+            });
+        }
+        buildUI();
+
+        // --- CAMERA CONTROLS ---
+        let camTheta = 0.6; // Horizontal angle
+        let camPhi = 0.4;   // Vertical angle
+        let camDist = 10.0;
+        let isDragging = false;
+        let lastX, lastY;
+
+        canvas.addEventListener('mousedown', (e) => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
+        canvas.addEventListener('mouseup', () => isDragging = false);
+        canvas.addEventListener('mouseleave', () => isDragging = false);
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            let dx = e.clientX - lastX;
+            let dy = e.clientY - lastY;
+            camTheta -= dx * 0.01;
+            camPhi += dy * 0.01;
+            // Clamp phi so we don't flip
+            camPhi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, camPhi));
+            lastX = e.clientX;
+            lastY = e.clientY;
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            camDist += e.deltaY * 0.01;
+            camDist = Math.max(4.0, Math.min(25.0, camDist));
+        });
+
+        // --- RENDER LOOP ---
+        let startTime = performance.now();
+        function render() {
+            const time = (performance.now() - startTime) / 1000.0;
+            
+            gl.viewport(0, 0, canvas.width, canvas.height);
+            gl.clearColor(0, 0, 0, 1);
+            gl.clear(gl.COLOR_BUFFER_BIT);
+
+            // Update Camera
+            const camX = camDist * Math.sin(camTheta) * Math.cos(camPhi);
+            const camY = camDist * Math.sin(camPhi);
+            const camZ = camDist * Math.cos(camTheta) * Math.cos(camPhi);
+
+            // Set Uniforms
+            gl.uniform2f(u.res, canvas.width, canvas.height);
+            gl.uniform1f(u.time, time);
+            gl.uniform3f(u.camPos, camX, camY, camZ);
+            gl.uniform3f(u.camTarget, 0, 1, 0); // Look at center of scene
+
+            // Sphere
+            const sCol = hexToRgb(state.Sphere.color);
+            gl.uniform3f(u.sPos, state.Sphere.pos[0], state.Sphere.pos[1], state.Sphere.pos[2]);
+            gl.uniform4f(u.sMat, sCol[0], sCol[1], sCol[2], state.Sphere.refl);
+            gl.uniform4f(u.sProps, state.Sphere.rough, state.Sphere.transp, state.Sphere.ior, 0.0);
+
+            // Cube
+            const cCol = hexToRgb(state.Cube.color);
+            gl.uniform3f(u.cPos, state.Cube.pos[0], state.Cube.pos[1], state.Cube.pos[2]);
+            gl.uniform4f(u.cMat, cCol[0], cCol[1], cCol[2], state.Cube.refl);
+            gl.uniform4f(u.cProps, state.Cube.rough, state.Cube.transp, state.Cube.ior, 0.0);
+
+            // Pyramid
+            const pCol = hexToRgb(state.Pyramid.color);
+            gl.uniform3f(u.pPos, state.Pyramid.pos[0], state.Pyramid.pos[1], state.Pyramid.pos[2]);
+            gl.uniform4f(u.pMat, pCol[0], pCol[1], pCol[2], state.Pyramid.refl);
+            gl.uniform4f(u.pProps, state.Pyramid.rough, state.Pyramid.transp, state.Pyramid.ior, 0.0);
+
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            requestAnimationFrame(render);
+        }
+        render();
+    </script>
+</body>
+</html>
