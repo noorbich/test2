@@ -1,649 +1,2592 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vanilla JS WebGL Ray Tracer</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background: #111;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #eee;
-        }
-        canvas { display: block; cursor: grab; }
-        canvas:active { cursor: grabbing; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FORGE / Athletic Collective — Strength, Forged.</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@800;900&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+:root {
+  --bg: #000000;
+  --deep-black: #0a0a0a;
+  --card: #141414;
+  --card-hi: #1c1c1c;
+  --text: #ffffff;
+  --text-soft: rgba(255,255,255,0.62);
+  --text-mute: rgba(255,255,255,0.32);
+  --line: rgba(255,255,255,0.14);
+  --highlight: #FF5C00;
+  --highlight-soft: rgba(255,92,0,0.18);
+  --silver: #B8B8BE;
+  --ease-quiet: cubic-bezier(.22, 1, .36, 1);
+  --ease-precise: cubic-bezier(.4, 0, .2, 1);
+  --ease-emphasis: cubic-bezier(.16, 1, .3, 1);
+}
 
-        #ui {
-            position: absolute;
-            top: 15px;
-            left: 15px;
-            background: rgba(20, 20, 25, 0.85);
-            backdrop-filter: blur(8px);
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #333;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            width: 260px;
-            max-height: 90vh;
-            overflow-y: auto;
-            z-index: 10;
-        }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--text); }
+body {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-x: hidden;
+  cursor: none;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--highlight); color: #000; }
+a, button { cursor: none; color: inherit; text-decoration: none; }
+button { background: none; border: none; font: inherit; }
+img { display: block; max-width: 100%; }
 
-        #ui h2 {
-            margin: 0 0 15px 0;
-            font-size: 16px;
-            text-align: center;
-            color: #fff;
-            border-bottom: 1px solid #444;
-            padding-bottom: 8px;
-        }
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  mix-blend-mode: overlay;
+}
 
-        .obj-group {
-            margin-bottom: 15px;
-            border: 1px solid #333;
-            border-radius: 6px;
-            padding: 10px;
-            background: rgba(0,0,0,0.2);
-        }
+#particle-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
 
-        .obj-group h3 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            color: #4af;
-            text-transform: uppercase;
-            cursor: pointer;
-        }
+#custom-cursor {
+  position: fixed;
+  top: 0; left: 0;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--text);
+  mix-blend-mode: difference;
+  pointer-events: none;
+  z-index: 9999;
+  will-change: transform, width, height, opacity;
+  transition: width .3s var(--ease-quiet), height .3s var(--ease-quiet), opacity .3s var(--ease-quiet);
+}
 
-        .control-row {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 6px;
-            font-size: 12px;
-        }
+@media (hover: none), (pointer: coarse) {
+  #custom-cursor { display: none !important; }
+  body, a, button { cursor: auto; }
+  input, select { cursor: auto; }
+}
 
-        .control-row label {
-            flex: 1;
-            margin-right: 10px;
-        }
+/* ===== NAV ===== */
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  padding: 1.4rem 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.92), rgba(0,0,0,0));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.nav__brand {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.nav__brand-mark {
+  width: 22px; height: 22px;
+  background: var(--highlight);
+  display: inline-block;
+  transform: skewX(-12deg);
+}
+.nav__brand-text { color: var(--text); }
+.nav__brand-text span { color: var(--silver); font-weight: 800; margin: 0 .3rem; }
 
-        .control-row input[type="range"] {
-            flex: 1.5;
-            cursor: pointer;
-        }
+.nav__links {
+  display: flex;
+  gap: 2.2rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+.nav__links a {
+  color: var(--text-soft);
+  transition: color .3s var(--ease-quiet);
+  position: relative;
+  padding: 0.3rem 0;
+}
+.nav__links a:hover { color: var(--text); }
+.nav__links a::after {
+  content: '';
+  position: absolute;
+  bottom: -2px; left: 0;
+  width: 0; height: 1px;
+  background: var(--highlight);
+  transition: width .35s var(--ease-quiet);
+}
+.nav__links a:hover::after { width: 100%; }
 
-        .control-row input[type="color"] {
-            width: 40px;
-            height: 20px;
-            border: none;
-            background: none;
-            cursor: pointer;
-        }
+.nav__cta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  padding: 0.8rem 1.5rem;
+  border: 1px solid var(--text);
+  color: var(--text);
+  transition: all .35s var(--ease-quiet);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nav__cta:hover {
+  background: var(--highlight);
+  border-color: var(--highlight);
+  color: #000;
+}
 
-        .val-display {
-            width: 35px;
-            text-align: right;
-            font-family: monospace;
-            color: #aaa;
-        }
+@media (max-width: 968px) {
+  .nav { padding: 1rem 1.5rem; }
+  .nav__links { display: none; }
+}
 
-        #info {
-            position: absolute;
-            bottom: 10px;
-            right: 10px;
-            font-size: 11px;
-            color: #666;
-            z-index: 10;
-        }
-    </style>
+/* ===== HERO ===== */
+.hero {
+  position: relative;
+  min-height: 100vh;
+  padding: 8rem 2.5rem 4rem;
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 4rem;
+  align-items: end;
+  z-index: 3;
+}
+.hero__bg-text {
+  position: absolute;
+  bottom: -3rem; right: -2rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 30vw;
+  line-height: 0.8;
+  color: var(--deep-black);
+  letter-spacing: -0.05em;
+  pointer-events: none;
+  z-index: 0;
+  user-select: none;
+  white-space: nowrap;
+}
+.hero__content { position: relative; z-index: 2; max-width: 760px; }
+.hero__eyebrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-soft);
+  margin-bottom: 2.5rem;
+  opacity: 0;
+}
+.hero__eyebrow-mark {
+  display: inline-block;
+  width: 8px; height: 8px;
+  background: var(--highlight);
+}
+.hero__eyebrow span.silver { color: var(--silver); }
+.hero__eyebrow span.dot { color: var(--text-mute); }
+
+.hero__title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: clamp(4rem, 11vw, 11rem);
+  line-height: 0.84;
+  letter-spacing: -0.04em;
+  margin-bottom: 2rem;
+  opacity: 0;
+}
+.hero__title-line { display: block; }
+.hero__title-slash { color: var(--highlight); display: inline-block; margin-right: 0.4rem; }
+.hero__title-sub {
+  display: block;
+  font-size: 0.22em;
+  letter-spacing: 0.06em;
+  color: var(--silver);
+  font-weight: 800;
+  margin-top: 1.2rem;
+  text-transform: uppercase;
+}
+
+.hero__sub {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.05rem;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--text-soft);
+  max-width: 560px;
+  margin-bottom: 2.8rem;
+  opacity: 0;
+}
+.hero__sub strong { color: var(--text); font-weight: 500; }
+
+.hero__cta-row {
+  display: flex;
+  gap: 1.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+  opacity: 0;
+}
+.hero__cta-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1.15rem 2rem;
+  background: var(--highlight);
+  color: #000;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 500;
+  transition: all .35s var(--ease-quiet);
+}
+.hero__cta-primary:hover {
+  background: var(--text);
+  transform: translateY(-2px);
+}
+.hero__cta-primary svg { width: 14px; height: 14px; }
+.hero__cta-secondary {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text-soft);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.15rem 0;
+  transition: color .3s var(--ease-quiet);
+}
+.hero__cta-secondary:hover { color: var(--text); }
+.hero__cta-secondary::before {
+  content: '';
+  display: inline-block;
+  width: 24px; height: 1px;
+  background: currentColor;
+}
+
+.hero__portrait {
+  position: relative;
+  z-index: 2;
+  height: 82vh;
+  min-height: 600px;
+  overflow: hidden;
+  background: var(--deep-black);
+}
+.hero__portrait-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.18) brightness(0.85);
+  animation: kenburns 22s ease-in-out infinite alternate;
+}
+@keyframes kenburns {
+  0%   { transform: scale(1.08) translate(-1.5%, -1%); }
+  100% { transform: scale(1.18) translate(1.5%, 1.5%); }
+}
+.hero__portrait-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.7) 100%),
+              linear-gradient(90deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 40%);
+  pointer-events: none;
+}
+.hero__portrait-tag {
+  position: absolute;
+  top: 1.4rem; left: 1.4rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--text);
+  display: flex; gap: 0.6rem; align-items: center;
+  z-index: 3;
+}
+.hero__portrait-tag::before {
+  content: '';
+  width: 6px; height: 6px;
+  background: var(--highlight);
+  display: inline-block;
+  animation: pulse 1.8s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.8); }
+}
+.hero__portrait-meta {
+  position: absolute;
+  bottom: 1.4rem; left: 1.4rem; right: 1.4rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+  z-index: 3;
+}
+.hero__portrait-meta div { display: flex; flex-direction: column; gap: 0.25rem; }
+.hero__portrait-meta span.label { color: var(--text-mute); font-size: 0.62rem; }
+.hero__portrait-meta span.val { color: var(--text); }
+
+.hero__info-bar {
+  position: absolute;
+  top: 50%;
+  right: 1.5rem;
+  transform: translateY(-50%) rotate(90deg);
+  transform-origin: right center;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  z-index: 4;
+  white-space: nowrap;
+}
+.hero__info-bar::before {
+  content: '';
+  display: inline-block;
+  width: 40px; height: 1px;
+  background: var(--highlight);
+  margin-right: 1rem;
+  vertical-align: middle;
+}
+
+@media (max-width: 968px) {
+  .hero { grid-template-columns: 1fr; padding: 7rem 1.5rem 3rem; }
+  .hero__portrait { height: 55vh; min-height: 380px; }
+  .hero__info-bar { display: none; }
+  .hero__bg-text { font-size: 44vw; }
+}
+
+/* ===== STATS ===== */
+.stats {
+  position: relative;
+  z-index: 3;
+  background: var(--deep-black);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 2.5rem 2.5rem;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2rem;
+}
+.stat {
+  border-left: 1px solid var(--line);
+  padding-left: 1.5rem;
+  position: relative;
+}
+.stat:first-child { border-left: none; padding-left: 0; }
+.stat__num {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: clamp(2.4rem, 4.8vw, 4rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.2rem;
+}
+.stat__num-unit {
+  font-size: 0.32em;
+  color: var(--highlight);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.stat__label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+.stat__label span { color: var(--text-mute); display: block; margin-top: 0.2rem; }
+
+@media (max-width: 768px) {
+  .stats { grid-template-columns: repeat(2, 1fr); padding: 1.5rem; gap: 1.5rem; }
+  .stat { border-left: none; padding-left: 0; border-top: 1px solid var(--line); padding-top: 1rem; }
+  .stat:first-child, .stat:nth-child(2) { border-top: none; padding-top: 0; }
+}
+
+/* ===== SECTION HEADER ===== */
+.section-header {
+  padding: 7rem 2.5rem 4rem;
+  max-width: 1600px;
+}
+.section-header__row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 3rem;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2.5rem;
+}
+.section-header__label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-soft);
+  display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.section-header__label::before {
+  content: '';
+  display: inline-block;
+  width: 32px; height: 1px;
+  background: var(--highlight);
+}
+.section-header__label span.silver { color: var(--silver); }
+.section-header__label span.dot { color: var(--text-mute); }
+.section-header__title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: clamp(2.2rem, 5.5vw, 4.8rem);
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  max-width: 16ch;
+}
+.section-header__title em {
+  font-style: normal;
+  color: var(--highlight);
+}
+.section-header__meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  text-align: right;
+  line-height: 1.7;
+  flex-shrink: 0;
+}
+.section-header__meta span { color: var(--text); }
+.section-header__meta div { margin-bottom: 0.3rem; }
+
+@media (max-width: 768px) {
+  .section-header { padding: 5rem 1.5rem 3rem; }
+  .section-header__row { flex-direction: column; align-items: flex-start; }
+  .section-header__meta { text-align: left; }
+}
+
+/* ===== MANIFESTO ===== */
+.manifesto {
+  position: relative;
+  z-index: 3;
+  padding: 8rem 2.5rem;
+  background: var(--bg);
+}
+.manifesto__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+.manifesto__label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-soft);
+  margin-bottom: 3rem;
+  display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;
+}
+.manifesto__label::before {
+  content: '';
+  display: inline-block;
+  width: 32px; height: 1px;
+  background: var(--highlight);
+}
+.manifesto__label span.silver { color: var(--silver); }
+.manifesto__label span.dot { color: var(--text-mute); }
+.manifesto__text {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.7rem, 3.4vw, 3.2rem);
+  line-height: 1.14;
+  letter-spacing: -0.025em;
+  color: var(--text);
+}
+.manifesto__text .word {
+  display: inline-block;
+  opacity: 0;
+  filter: blur(12px) brightness(30%);
+  will-change: filter, opacity;
+}
+.manifesto__text .word--accent { color: var(--highlight); }
+.manifesto__text .word--muted { color: var(--text-soft); }
+
+.manifesto__signature {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--line);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.manifesto__signature span.silver { color: var(--silver); }
+.manifesto__signature span.val { color: var(--text); }
+
+@media (max-width: 768px) {
+  .manifesto { padding: 5rem 1.5rem; }
+}
+
+/* ===== CURRICULUM ===== */
+.curriculum {
+  position: relative;
+  z-index: 3;
+  background: var(--deep-black);
+}
+.curriculum__viewport {
+  position: relative;
+  width: 100%;
+}
+.curriculum__sticky {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.curriculum__header {
+  padding: 3rem 2.5rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  gap: 2rem;
+}
+.curriculum__header-left { max-width: 720px; }
+.curriculum__header-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-soft);
+  margin-bottom: 1rem;
+  display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;
+}
+.curriculum__header-label::before {
+  content: '';
+  display: inline-block;
+  width: 32px; height: 1px;
+  background: var(--highlight);
+}
+.curriculum__header-label span.silver { color: var(--silver); }
+.curriculum__header-label span.dot { color: var(--text-mute); }
+.curriculum__header-title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: clamp(1.8rem, 3.6vw, 3rem);
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+.curriculum__header-title em { font-style: normal; color: var(--highlight); }
+.curriculum__header-meta {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  text-align: right;
+  line-height: 1.7;
+  flex-shrink: 0;
+}
+.curriculum__header-meta span { color: var(--text); }
+
+.curriculum__track-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+}
+.curriculum__track {
+  display: flex;
+  gap: 2rem;
+  padding: 0 5rem;
+  will-change: transform;
+}
+.curriculum__card {
+  flex-shrink: 0;
+  width: 380px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  padding: 1.8rem;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: skewX .25s var(--ease-quiet), border-color .35s var(--ease-quiet);
+  height: 600px;
+}
+.curriculum__card:hover { border-color: var(--highlight); }
+.curriculum__card-num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  color: var(--text-mute);
+  margin-bottom: 1.4rem;
+  display: flex;
+  justify-content: space-between;
+  text-transform: uppercase;
+}
+.curriculum__card-num span:last-child { color: var(--highlight); }
+.curriculum__card-image {
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+  margin-bottom: 1.4rem;
+  position: relative;
+  background: var(--bg);
+}
+.curriculum__card-image img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.18);
+  transition: transform .9s var(--ease-quiet);
+}
+.curriculum__card:hover .curriculum__card-image img {
+  transform: scale(1.06);
+}
+.curriculum__card-subtitle {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--highlight);
+  margin-bottom: 0.6rem;
+}
+.curriculum__card-title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 1.7rem;
+  line-height: 0.95;
+  letter-spacing: -0.025em;
+  margin-bottom: 1.4rem;
+}
+.curriculum__card-list {
+  list-style: none;
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  line-height: 1.6;
+  margin-top: auto;
+}
+.curriculum__card-list li {
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.curriculum__card-list li span:first-child { color: var(--text-mute); }
+.curriculum__card-list li span:last-child { color: var(--text); }
+
+.curriculum__card--feature {
+  width: 460px;
+  background: linear-gradient(180deg, var(--card-hi) 0%, var(--card) 100%);
+}
+.curriculum__card--feature .curriculum__card-title { font-size: 2.4rem; }
+
+.curriculum__card--method {
+  width: 320px;
+  background: transparent;
+  border: 1px solid var(--line);
+  height: 460px;
+  align-self: center;
+}
+.curriculum__card--method .curriculum__card-image { display: none; }
+.curriculum__card--method .curriculum__card-title { font-size: 1.35rem; margin-bottom: 1rem; }
+.curriculum__card--method .curriculum__card-text {
+  font-size: 0.86rem;
+  color: var(--text-soft);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+.curriculum__card--method .curriculum__card-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--silver);
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  margin-top: auto;
+}
+
+.curriculum__progress {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14rem;
+  height: 1px;
+  background: var(--line);
+  overflow: hidden;
+}
+.curriculum__progress-fill {
+  height: 100%;
+  background: var(--highlight);
+  width: 0%;
+  transition: width .1s linear;
+}
+.curriculum__progress-label {
+  position: absolute;
+  top: -1.5rem; left: 0;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  white-space: nowrap;
+}
+.curriculum__progress-label span { color: var(--text); }
+
+@media (max-width: 968px) {
+  .curriculum__sticky { position: relative; height: auto; }
+  .curriculum__track-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 2rem; }
+  .curriculum__track { padding: 2rem 1.5rem; gap: 1.5rem; }
+  .curriculum__progress { display: none; }
+  .curriculum__header { padding: 4rem 1.5rem 2rem; flex-direction: column; align-items: flex-start; gap: 1.5rem; }
+  .curriculum__header-meta { text-align: left; }
+  .curriculum__card { width: 280px; height: auto; padding: 1.5rem; }
+  .curriculum__card--feature { width: 300px; }
+  .curriculum__card--method { width: 260px; height: auto; }
+}
+
+/* ===== COACHES ===== */
+.coaches {
+  position: relative;
+  z-index: 3;
+  padding: 0 0 8rem;
+}
+.coaches__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--line);
+  padding: 0 2.5rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+.coach {
+  background: var(--bg);
+  padding: 2.5rem 2rem;
+  position: relative;
+  cursor: none;
+  perspective: 1200px;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+.coach__inner {
+  position: relative;
+  width: 100%;
+  height: 340px;
+  margin-bottom: 1.8rem;
+  transform-style: preserve-3d;
+  transition: transform .5s var(--ease-quiet);
+  overflow: hidden;
+}
+.coach:hover .coach__inner {
+  transform: rotateY(-8deg) rotateX(2deg);
+}
+.coach__image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.18) brightness(0.82);
+  transition: filter .6s var(--ease-quiet), transform .8s var(--ease-quiet);
+}
+.coach:hover .coach__image {
+  filter: grayscale(0.5) contrast(1.05) brightness(1);
+  transform: scale(1.04);
+}
+.coach__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.85) 100%);
+  pointer-events: none;
+}
+.coach__overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--highlight);
+  mix-blend-mode: multiply;
+  opacity: 0;
+  transition: opacity .5s var(--ease-quiet);
+}
+.coach:hover .coach__overlay::after { opacity: 0.16; }
+.coach__num {
+  position: absolute;
+  top: 1rem; left: 1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  color: var(--text);
+  z-index: 2;
+  background: rgba(0,0,0,0.65);
+  padding: 0.35rem 0.6rem;
+  text-transform: uppercase;
+}
+.coach__name {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 1.7rem;
+  line-height: 1;
+  letter-spacing: -0.025em;
+  margin-bottom: 0.4rem;
+  color: var(--text);
+}
+.coach__role {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--highlight);
+  margin-bottom: 1.4rem;
+}
+.coach__bio {
+  font-size: 0.84rem;
+  color: var(--text-soft);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+.coach__stats {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1rem 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 1.4rem;
+  font-family: 'IBM Plex Mono', monospace;
+}
+.coach__stat-num {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 1.4rem;
+  color: var(--text);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.coach__stat-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-mute);
+  margin-top: 0.3rem;
+}
+.coach__creds {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.coach__cred {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--silver);
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 968px) {
+  .coaches__grid { grid-template-columns: 1fr; padding: 0 1.5rem; }
+  .coach { min-height: auto; }
+}
+
+/* ===== STORIES ===== */
+.stories {
+  position: relative;
+  z-index: 3;
+  background: var(--deep-black);
+  padding: 0 0 8rem;
+}
+.stories__inner {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 2.5rem;
+}
+.stories__list {
+  display: flex;
+  flex-direction: column;
+}
+.story {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  padding: 5rem 0;
+  border-top: 1px solid var(--line);
+  align-items: center;
+}
+.story:last-child { border-bottom: 1px solid var(--line); }
+.story--reverse { direction: rtl; }
+.story--reverse > * { direction: ltr; }
+
+.story__media {
+  position: relative;
+  height: 560px;
+  overflow: hidden;
+  background: var(--bg);
+}
+.story__media-img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.2);
+  transition: transform 1.4s var(--ease-quiet);
+}
+.story:hover .story__media-img { transform: scale(1.05); }
+.story__media-tag {
+  position: absolute;
+  top: 1.2rem; left: 1.2rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text);
+  background: rgba(0,0,0,0.75);
+  padding: 0.4rem 0.7rem;
+  display: flex; align-items: center; gap: 0.5rem;
+  z-index: 2;
+}
+.story__media-tag::before {
+  content: '';
+  width: 6px; height: 6px;
+  background: var(--highlight);
+}
+.story__media-num {
+  position: absolute;
+  bottom: 1.2rem; right: 1.2rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 4rem;
+  line-height: 1;
+  color: var(--text);
+  letter-spacing: -0.04em;
+  text-shadow: 0 0 30px rgba(0,0,0,0.9);
+  z-index: 2;
+}
+.story__media-num span { color: var(--highlight); font-size: 0.45em; vertical-align: top; }
+
+.story__content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.story__num-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.story__num-row span:last-child { color: var(--highlight); }
+.story__name {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+}
+.story__name span { color: var(--silver); font-weight: 800; display: block; margin-top: 0.3rem; font-size: 0.7em; }
+.story__quote {
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--text-soft);
+  font-weight: 400;
+  border-left: 2px solid var(--highlight);
+  padding-left: 1.5rem;
+  font-style: italic;
+}
+.story__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1.5rem;
+}
+.story__metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.story__metric-num {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 1.7rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.story__metric-num span { color: var(--highlight); font-size: 0.55em; margin-left: 0.1em; }
+.story__metric-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-mute);
+  line-height: 1.4;
+}
+.story__path {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--silver);
+  display: flex; gap: 0.5rem; flex-wrap: wrap;
+}
+.story__path span { padding: 0.3rem 0.6rem; border: 1px solid var(--line); }
+
+@media (max-width: 968px) {
+  .story { grid-template-columns: 1fr; gap: 2rem; padding: 3rem 0; }
+  .story--reverse { direction: ltr; }
+  .story__media { height: 380px; }
+  .stories__inner { padding: 0 1.5rem; }
+}
+
+/* ===== SCHEDULE ===== */
+.schedule {
+  position: relative;
+  z-index: 3;
+  padding: 0 2.5rem 8rem;
+}
+.schedule__inner {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+.schedule__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+.schedule__day {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 1.2rem;
+  min-height: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  background: var(--bg);
+  transition: background .3s var(--ease-quiet);
+}
+.schedule__day:hover { background: var(--deep-black); }
+.schedule__day-name {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.6rem;
+  display: flex; justify-content: space-between;
+}
+.schedule__day-name span:first-child { color: var(--text); font-weight: 500; }
+.schedule__slot {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text-soft);
+  display: flex;
+  justify-content: space-between;
+  padding: 0.4rem 0;
+  transition: color .3s var(--ease-quiet);
+  letter-spacing: 0.04em;
+}
+.schedule__slot:hover { color: var(--highlight); }
+.schedule__slot-time { color: var(--text); }
+.schedule__slot-class { color: var(--text-mute); text-transform: uppercase; letter-spacing: 0.1em; font-size: 0.66rem; }
+
+@media (max-width: 968px) {
+  .schedule { padding: 0 1.5rem 5rem; }
+  .schedule__grid { grid-template-columns: repeat(2, 1fr); }
+  .schedule__day { min-height: 200px; }
+}
+
+/* ===== BOOK ===== */
+.book {
+  position: relative;
+  z-index: 3;
+  padding: 8rem 2.5rem;
+  background: var(--deep-black);
+  border-top: 1px solid var(--line);
+  overflow: hidden;
+}
+.book__bg-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 26vw;
+  color: rgba(255,255,255,0.025);
+  letter-spacing: -0.06em;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 0;
+}
+.book__inner {
+  position: relative;
+  z-index: 1;
+  max-width: 1500px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5rem;
+  align-items: start;
+}
+.book__left { padding-right: 2rem; }
+.book__label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--text-soft);
+  margin-bottom: 2rem;
+  display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap;
+}
+.book__label::before {
+  content: '';
+  display: inline-block;
+  width: 32px; height: 1px;
+  background: var(--highlight);
+}
+.book__label span.silver { color: var(--silver); }
+.book__label span.dot { color: var(--text-mute); }
+.book__title {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: clamp(2.4rem, 5.5vw, 4.6rem);
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  margin-bottom: 2rem;
+}
+.book__title em { font-style: normal; color: var(--highlight); }
+.book__desc {
+  font-size: 1.05rem;
+  color: var(--text-soft);
+  line-height: 1.6;
+  margin-bottom: 3rem;
+  max-width: 500px;
+}
+.book__contact {
+  display: flex;
+  flex-direction: column;
+  gap: 1.3rem;
+  border-top: 1px solid var(--line);
+  padding-top: 2rem;
+}
+.book__contact-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 2rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  align-items: baseline;
+}
+.book__contact-row span:first-child {
+  color: var(--text-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.68rem;
+}
+.book__contact-row span:last-child { color: var(--text); }
+
+.book__form {
+  background: var(--card);
+  padding: 3rem;
+  border: 1px solid var(--line);
+}
+.book__form-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  margin-bottom: 0.6rem;
+  display: block;
+}
+.book__form-group {
+  margin-bottom: 1.5rem;
+}
+.book__form-input,
+.book__form-select {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  padding: 0.7rem 0;
+  outline: none;
+  transition: border-color .3s var(--ease-quiet);
+}
+.book__form-input::placeholder { color: var(--text-mute); }
+.book__form-input:focus,
+.book__form-select:focus {
+  border-color: var(--highlight);
+}
+.book__form-select { color: var(--text-soft); cursor: none; appearance: none; -webkit-appearance: none; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'><path d='M2 4l4 4 4-4' stroke='%23FF5C00' fill='none' stroke-width='1.5'/></svg>"); background-repeat: no-repeat; background-position: right 0.5rem center; padding-right: 1.5rem; }
+.book__form-select option { background: var(--card); color: var(--text); }
+
+.book__form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.book__form-submit {
+  width: 100%;
+  padding: 1.3rem 2rem;
+  background: var(--highlight);
+  color: #000;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 500;
+  margin-top: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  transition: all .35s var(--ease-quiet);
+  cursor: none;
+}
+.book__form-submit:hover {
+  background: var(--text);
+}
+.book__form-submit svg { width: 14px; height: 14px; }
+
+.book__form-note {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-mute);
+  margin-top: 1.5rem;
+  line-height: 1.7;
+}
+
+@media (max-width: 968px) {
+  .book { padding: 5rem 1.5rem; }
+  .book__inner { grid-template-columns: 1fr; gap: 3rem; }
+  .book__form { padding: 2rem; }
+  .book__form-row { grid-template-columns: 1fr; }
+  .book__contact-row { grid-template-columns: 100px 1fr; gap: 1rem; }
+}
+
+/* ===== FOOTER ===== */
+.footer {
+  position: relative;
+  z-index: 3;
+  background: var(--bg);
+  padding: 5rem 2.5rem 2rem;
+  border-top: 1px solid var(--line);
+}
+.footer__inner {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+.footer__top {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 3rem;
+  padding-bottom: 3rem;
+  border-bottom: 1px solid var(--line);
+}
+.footer__brand {
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 900;
+  font-size: 1.8rem;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.footer__brand span { color: var(--highlight); }
+.footer__brand-mark {
+  width: 18px; height: 18px;
+  background: var(--highlight);
+  display: inline-block;
+  transform: skewX(-12deg);
+}
+.footer__tagline {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.88rem;
+  color: var(--text-soft);
+  line-height: 1.6;
+  max-width: 380px;
+}
+.footer__col-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  margin-bottom: 1.2rem;
+}
+.footer__col ul { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
+.footer__col a, .footer__col li {
+  font-size: 0.84rem;
+  color: var(--text-soft);
+  transition: color .3s var(--ease-quiet);
+  font-family: 'Inter', sans-serif;
+}
+.footer__col a:hover { color: var(--highlight); }
+
+.footer__bottom {
+  padding-top: 2rem;
+  display: flex;
+  justify-content: space-between;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-mute);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.footer__bottom span.silver { color: var(--silver); }
+
+@media (max-width: 768px) {
+  .footer { padding: 4rem 1.5rem 2rem; }
+  .footer__top { grid-template-columns: 1fr; gap: 2rem; }
+  .footer__bottom { flex-direction: column; }
+}
+
+/* ===== ANIMATIONS ===== */
+.fade-up {
+  opacity: 0;
+  transform: translateY(40px);
+  transition: opacity .9s var(--ease-quiet), transform .9s var(--ease-quiet);
+}
+.fade-up.is-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .hero__portrait-img { animation: none; }
+}
+</style>
 </head>
 <body>
 
-    <div id="ui">
-        <h2>Material Editor</h2>
-        <div id="controls"></div>
+<canvas id="particle-canvas"></canvas>
+<div id="custom-cursor"></div>
+
+<nav class="nav">
+  <a href="#" class="nav__brand">
+    <span class="nav__brand-mark"></span>
+    <span class="nav__brand-text">FORGE <span>/</span> ATHLETIC</span>
+  </a>
+  <div class="nav__links">
+    <a href="#manifesto">Manifesto</a>
+    <a href="#curriculum">Curriculum</a>
+    <a href="#coaches">Coaches</a>
+    <a href="#stories">Members</a>
+    <a href="#schedule">Schedule</a>
+  </div>
+  <a href="#book" class="nav__cta">Book trial ↗</a>
+</nav>
+
+<section class="hero">
+  <div class="hero__bg-text">FORGE</div>
+  <div class="hero__info-bar">SESSION 0427 / BLOCK 03 / WEEK 06 — LIVE ON FLOOR</div>
+  
+  <div class="hero__content">
+    <div class="hero__eyebrow" id="hero-eyebrow">
+      <span class="hero__eyebrow-mark"></span>
+      <span>EST. 2018 — DOWNTOWN, 7TH AVE</span>
+      <span class="dot">·</span>
+      <span class="silver">CERTIFIED COACHING COLLECTIVE</span>
     </div>
-    <div id="info">Drag to Orbit | Scroll to Zoom</div>
+    
+    <h1 class="hero__title" id="hero-title">
+      <span class="hero__title-line"><span class="hero__title-slash">/</span>FORGE</span>
+      <span class="hero__title-line">ATHLETIC.</span>
+      <span class="hero__title-sub">— Strength is a practice, not a season.</span>
+    </h1>
+    
+    <p class="hero__sub" id="hero-sub">
+      A coaching collective for serious lifters. <strong>Twelve certified coaches. Three training disciplines. One community built under iron.</strong> We program for the body you'll have at fifty — not just the one you want by August.
+    </p>
+    
+    <div class="hero__cta-row" id="hero-cta">
+      <a href="#book" class="hero__cta-primary">
+        Book a trial session
+        <svg viewBox="0 0 14 14" fill="none"><path d="M1 7h12M8 2l5 5-5 5" stroke="currentColor" stroke-width="1.5"/></svg>
+      </a>
+      <a href="#coaches" class="hero__cta-secondary">Meet the coaching team</a>
+    </div>
+  </div>
+  
+  <div class="hero__portrait">
+    <img src="https://picsum.photos/seed/forge-hero-athlete-barbell/900/1200" alt="Athlete mid-lift" class="hero__portrait-img">
+    <div class="hero__portrait-overlay"></div>
+    <div class="hero__portrait-tag">LIVE — 05:42 AM / BLOCK 03</div>
+    <div class="hero__portrait-meta">
+      <div>
+        <span class="label">ATHLETE</span>
+        <span class="val">SOFIA M. — 24-WK BLOCK</span>
+      </div>
+      <div>
+        <span class="label">LIFT</span>
+        <span class="val">CLEAN & JERK / 78 KG ×3</span>
+      </div>
+      <div>
+        <span class="label">FRAME</span>
+        <span class="val">0427 / 2024</span>
+      </div>
+    </div>
+  </div>
+</section>
 
-    <canvas id="canvas"></canvas>
+<section class="stats">
+  <div class="stat">
+    <div class="stat__num">12<span class="stat__num-unit">/COA</span></div>
+    <div class="stat__label">Certified coaches<span>on floor, daily</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__num">847</div>
+    <div class="stat__label">Active members<span>across 3 disciplines</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__num">06</div>
+    <div class="stat__label">Years operating<span>7th Ave, downtown</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__num">03</div>
+    <div class="stat__label">Training disciplines<span>hypertrophy · cond · perf</span></div>
+  </div>
+  <div class="stat">
+    <div class="stat__num">94<span class="stat__num-unit">%</span></div>
+    <div class="stat__label">12-week retention<span>across all programs</span></div>
+  </div>
+</section>
 
-    <script id="vertexShader" type="x-shader/x-vertex">#version 300 es
-        in vec2 aPos;
+<section class="manifesto" id="manifesto">
+  <div class="manifesto__inner">
+    <div class="manifesto__label">
+      <span>02 / MANIFESTO</span>
+      <span class="dot">·</span>
+      <span class="silver">READ IN 38 SEC</span>
+    </div>
+    <p class="manifesto__text" id="manifesto-text">Strength is not a gift. It is a debt paid in sweat, in discipline, in the willingness to return to the bar when every fiber says stop. We do not sell shortcuts. We do not sell vanity. We sell the patient, brutal craft of building a body that does what you ask of it — for decades, not for summer. The coaches here have competed, certified, and failed forward. The members here have shown up at five in the morning and eleven at night. This is not a gym. This is a collective.</p>
+    <div class="manifesto__signature">
+      <span>SIGNED — <span class="val">THE FORGE COACHING STAFF</span></span>
+      <span class="silver">EST. 2018 / DOWNTOWN, 7TH AVE</span>
+    </div>
+  </div>
+</section>
+
+<section class="curriculum" id="curriculum">
+  <div class="curriculum__viewport" id="curriculum-viewport">
+    <div class="curriculum__sticky">
+      <div class="curriculum__header">
+        <div class="curriculum__header-left">
+          <div class="curriculum__header-label">
+            <span>03 / CURRICULUM</span>
+            <span class="dot">·</span>
+            <span class="silver">BY GOAL, NOT BY TREND</span>
+          </div>
+          <h2 class="curriculum__header-title">Three disciplines.<br><em>One craft.</em></h2>
+        </div>
+        <div class="curriculum__header-meta">
+          <div>SCROLL HORIZONTALLY <span>→</span></div>
+          <div>07 CARDS / 03 TRACKS</div>
+        </div>
+      </div>
+      
+      <div class="curriculum__track-wrap">
+        <div class="curriculum__track" id="curriculum-track">
+          
+          <article class="curriculum__card curriculum__card--feature">
+            <div class="curriculum__card-num">
+              <span>TRACK 01</span>
+              <span>12 WEEKS</span>
+            </div>
+            <div class="curriculum__card-image">
+              <img src="https://picsum.photos/seed/curriculum-hypertrophy-barbell/800/600" alt="Hypertrophy training">
+            </div>
+            <div class="curriculum__card-subtitle">— MUSCLE GAIN</div>
+            <h3 class="curriculum__card-title">Hypertrophy<br>Block</h3>
+            <ul class="curriculum__card-list">
+              <li><span>SESSIONS / WK</span><span>4 × 75 MIN</span></li>
+              <li><span>PROGRESSION</span><span>DUP PERIODIZED</span></li>
+              <li><span>VOLUME TIER</span><span>RECOVERY-MATCHED</span></li>
+              <li><span>TRACKING</span><span>INBODY × 14D</span></li>
+              <li><span>PREREQ</span><span>NONE — SCALED</span></li>
+            </ul>
+          </article>
+          
+          <article class="curriculum__card curriculum__card--method">
+            <div class="curriculum__card-num">
+              <span>METHOD</span>
+              <span>01</span>
+            </div>
+            <h3 class="curriculum__card-title">Compound-first programming</h3>
+            <p class="curriculum__card-text">Every block opens with squat, hinge, press, or pull — accessories follow, tiered to recovery. We don't perform exercises; we train movements, then load them honestly.</p>
+            <div class="curriculum__card-tag">— APPLIED ACROSS ALL TRACKS</div>
+          </article>
+          
+          <article class="curriculum__card curriculum__card--feature">
+            <div class="curriculum__card-num">
+              <span>TRACK 02</span>
+              <span>8 WEEKS</span>
+            </div>
+            <div class="curriculum__card-image">
+              <img src="https://picsum.photos/seed/curriculum-conditioning-rower/800/600" alt="Conditioning training">
+            </div>
+            <div class="curriculum__card-subtitle">— FAT LOSS</div>
+            <h3 class="curriculum__card-title">Conditioning<br>Block</h3>
+            <ul class="curriculum__card-list">
+              <li><span>SESSIONS / WK</span><span>5 × 50 MIN</span></li>
+              <li><span>STRUCTURE</span><span>HYBRID Z2 / Z3</span></li>
+              <li><span>NUTRITION</span><span>COACHING INCL.</span></li>
+              <li><span>TRACKING</span><span>DEXA × 21D</span></li>
+              <li><span>PREREQ</span><span>MOVEMENT SCREEN</span></li>
+            </ul>
+          </article>
+          
+          <article class="curriculum__card curriculum__card--method">
+            <div class="curriculum__card-num">
+              <span>METHOD</span>
+              <span>02</span>
+            </div>
+            <h3 class="curriculum__card-title">Energy system periodization</h3>
+            <p class="curriculum__card-text">Alactic, lactic, aerobic — each trained in its own window. No mixed-modality soup. Every interval has a reason; every rest period is measured to the second.</p>
+            <div class="curriculum__card-tag">— CONDITIONING + PERFORMANCE</div>
+          </article>
+          
+          <article class="curriculum__card curriculum__card--feature">
+            <div class="curriculum__card-num">
+              <span>TRACK 03</span>
+              <span>16 WEEKS</span>
+            </div>
+            <div class="curriculum__card-image">
+              <img src="https://picsum.photos/seed/curriculum-performance-platform/800/600" alt="Performance training">
+            </div>
+            <div class="curriculum__card-subtitle">— FITNESS</div>
+            <h3 class="curriculum__card-title">Performance<br>Block</h3>
+            <ul class="curriculum__card-list">
+              <li><span>SESSIONS / WK</span><span>4-6 × 90 MIN</span></li>
+              <li><span>FOCUS</span><span>OLY + PLYO</span></li>
+              <li><span>TESTING</span><span>MONTHLY BATTERY</span></li>
+              <li><span>TRACKING</span><span>FORCE PLATE</span></li>
+              <li><span>PREREQ</span><span>12-MO TRAINING AGE</span></li>
+            </ul>
+          </article>
+          
+          <article class="curriculum__card curriculum__card--method">
+            <div class="curriculum__card-num">
+              <span>METHOD</span>
+              <span>03</span>
+            </div>
+            <h3 class="curriculum__card-title">Monthly testing battery</h3>
+            <p class="curriculum__card-text">Force plate, jump height, 1RM estimation, mobility screen. Numbers in, numbers out. If we can't measure it, we won't promise it.</p>
+            <div class="curriculum__card-tag">— PERFORMANCE TRACK</div>
+          </article>
+          
+          <article class="curriculum__card curriculum__card--feature">
+            <div class="curriculum__card-num">
+              <span>NOT SURE?</span>
+              <span>BOOK TRIAL</span>
+            </div>
+            <div class="curriculum__card-image">
+              <img src="https://picsum.photos/seed/curriculum-trial-coaching/800/600" alt="Trial session">
+            </div>
+            <div class="curriculum__card-subtitle">— FREE INTRO</div>
+            <h3 class="curriculum__card-title">Movement<br>Screening</h3>
+            <ul class="curriculum__card-list">
+              <li><span>DURATION</span><span>60 MINUTES</span></li>
+              <li><span>WITH</span><span>HEAD COACH</span></li>
+              <li><span>OUTPUT</span><span>TRACK RECOMMENDATION</span></li>
+              <li><span>COST</span><span>FREE</span></li>
+              <li><span>BOOKING</span><span>48-HR LEAD</span></li>
+            </ul>
+          </article>
+          
+        </div>
+      </div>
+      
+      <div class="curriculum__progress">
+        <div class="curriculum__progress-label"><span id="curr-card-num">01</span> / 07 CARDS</div>
+        <div class="curriculum__progress-fill" id="curriculum-progress"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="coaches" id="coaches">
+  <div class="section-header">
+    <div class="section-header__row">
+      <div>
+        <div class="section-header__label">
+          <span>04 / COACHING STAFF</span>
+          <span class="dot">·</span>
+          <span class="silver">12 CERTIFIED, 6 ON FLOOR DAILY</span>
+        </div>
+        <h2 class="section-header__title">Coaches who've <em>competed</em>, certified, and failed forward.</h2>
+      </div>
+      <div class="section-header__meta">
+        <div>SCREENED / CONTINUING-ED REQUIRED</div>
+        <div>AVG. EXPERIENCE <span>8.5 YRS</span></div>
+        <div>NATIONAL-LEVEL LIFTERS <span>04</span></div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="coaches__grid">
+    <article class="coach" data-cursor-hover>
+      <div class="coach__inner">
+        <img src="https://picsum.photos/seed/coach-marcus-portrait/600/800" alt="Marcus Chen" class="coach__image">
+        <div class="coach__overlay"></div>
+        <div class="coach__num">01 / HEAD COACH</div>
+      </div>
+      <h3 class="coach__name">Marcus Chen</h3>
+      <div class="coach__role">— Head Coach / Strength & Conditioning</div>
+      <p class="coach__bio">Eleven years coaching. Former national-level weightlifter. Marcus programs the performance track and oversees every coach's continuing education. Believes the barbell is the most honest tool ever built.</p>
+      <div class="coach__stats">
+        <div>
+          <div class="coach__stat-num">11</div>
+          <div class="coach__stat-label">Years coaching</div>
+        </div>
+        <div>
+          <div class="coach__stat-num">2×</div>
+          <div class="coach__stat-label">National level</div>
+        </div>
+      </div>
+      <div class="coach__creds">
+        <span class="coach__cred">CSCS</span>
+        <span class="coach__cred">NSCA-CPT</span>
+        <span class="coach__cred">USAW-L2</span>
+        <span class="coach__cred">FRC-MOBILITY</span>
+      </div>
+    </article>
+    
+    <article class="coach" data-cursor-hover>
+      <div class="coach__inner">
+        <img src="https://picsum.photos/seed/coach-elena-portrait/600/800" alt="Elena Voss" class="coach__image">
+        <div class="coach__overlay"></div>
+        <div class="coach__num">02 / HYPERTROPHY LEAD</div>
+      </div>
+      <h3 class="coach__name">Elena Voss</h3>
+      <div class="coach__role">— Hypertrophy Lead / Nutrition</div>
+      <p class="coach__bio">Eight years under the bar. Built the hypertrophy curriculum from scratch. IFBB figure competitor, 2019. Elena runs the InBody program and the bi-weekly nutrition seminars for new members.</p>
+      <div class="coach__stats">
+        <div>
+          <div class="coach__stat-num">08</div>
+          <div class="coach__stat-label">Years coaching</div>
+        </div>
+        <div>
+          <div class="coach__stat-num">IFBB</div>
+          <div class="coach__stat-label">Figure, 2019</div>
+        </div>
+      </div>
+      <div class="coach__creds">
+        <span class="coach__cred">NASM-CPT</span>
+        <span class="coach__cred">PN-L1</span>
+        <span class="coach__cred">ISSN-CISSN</span>
+        <span class="coach__cred">FRC-CMS</span>
+      </div>
+    </article>
+    
+    <article class="coach" data-cursor-hover>
+      <div class="coach__inner">
+        <img src="https://picsum.photos/seed/coach-darius-portrait/600/800" alt="Darius Okafor" class="coach__image">
+        <div class="coach__overlay"></div>
+        <div class="coach__num">03 / OLYMPIC LIFTING</div>
+      </div>
+      <h3 class="coach__name">Darius Okafor</h3>
+      <div class="coach__role">— Olympic Lifting / Performance</div>
+      <p class="coach__bio">Nine years coaching the snatch and clean & jerk. Two-time national championship competitor, 87kg class. Darius runs Saturday open-platform sessions and the monthly lifting clinic.</p>
+      <div class="coach__stats">
+        <div>
+          <div class="coach__stat-num">09</div>
+          <div class="coach__stat-label">Years coaching</div>
+        </div>
+        <div>
+          <div class="coach__stat-num">2×</div>
+          <div class="coach__stat-label">National champ</div>
+        </div>
+      </div>
+      <div class="coach__creds">
+        <span class="coach__cred">USAW-L2</span>
+        <span class="coach__cred">CSCS</span>
+        <span class="coach__cred">SPORT-COACH</span>
+      </div>
+    </article>
+    
+    <article class="coach" data-cursor-hover>
+      <div class="coach__inner">
+        <img src="https://picsum.photos/seed/coach-yuki-portrait/600/800" alt="Yuki Tanaka" class="coach__image">
+        <div class="coach__overlay"></div>
+        <div class="coach__num">04 / MOBILITY & RECOVERY</div>
+      </div>
+      <h3 class="coach__name">Yuki Tanaka</h3>
+      <div class="coach__role">— Mobility & Recovery / Prehab</div>
+      <p class="coach__bio">Seven years in clinical movement. Physical therapist assistant turned coach. Yuki built the recovery protocol every member follows post-session — mobility, breath, sleep. The unsung work.</p>
+      <div class="coach__stats">
+        <div>
+          <div class="coach__stat-num">07</div>
+          <div class="coach__stat-label">Years coaching</div>
+        </div>
+        <div>
+          <div class="coach__stat-num">PTA</div>
+          <div class="coach__stat-label">Clinical background</div>
+        </div>
+      </div>
+      <div class="coach__creds">
+        <span class="coach__cred">FRC-CMS</span>
+        <span class="coach__cred">FRC-MS</span>
+        <span class="coach__cred">PTA</span>
+        <span class="coach__cred">FR-LOWER</span>
+      </div>
+    </article>
+    
+    <article class="coach" data-cursor-hover>
+      <div class="coach__inner">
+        <img src="https://picsum.photos/seed/coach-priya-portrait/600/800" alt="Priya Sharma" class="coach__image">
+        <div class="coach__overlay"></div>
+        <div class="coach__num">05 / CONDITIONING</div>
+      </div>
+      <h3 class="coach__name">Priya Sharma</h3>
+      <div class="coach__role">— Conditioning / Metabolic</div>
+      <p class="coach__bio">Six years programming conditioning blocks. Former collegiate rower, Division I. Priya runs the rower and bike intervals, and writes the hybrid Z2/Z3 protocols for the fat-loss track.</p>
+      <div class="coach__stats">
+        <div>
+          <div class="coach__stat-num">06</div>
+          <div class="coach__stat-label">Years coaching</div>
+        </div>
+        <div>
+          <div class="coach__stat-num">D1</div>
+          <div class="coach__stat-label">Rowing, collegiate</div>
+        </div>
+      </div>
+      <div class="coach__creds">
+        <span class="coach__cred">ACE-CPT</span>
+        <span class="coach__cred">ISSN-CISSN</span>
+        <span class="coach__cred">USAW-L1</span>
+      </div>
+    </article>
+    
+    <article class="coach" data-cursor-hover>
+      <div class="coach__inner">
+        <img src="https://picsum.photos/seed/coach-kai-portrait/600/800" alt="Kai Bergstrom" class="coach__image">
+        <div class="coach__overlay"></div>
+        <div class="coach__num">06 / POWERLIFTING</div>
+      </div>
+      <h3 class="coach__name">Kai Bergstrom</h3>
+      <div class="coach__role">— Powerlifting / Strength</div>
+      <p class="coach__bio">Ten years on the platform. Best lifts in competition: 285 / 180 / 310. Kai coaches the strength athletes and runs the quarterly mock meets. Believes in submaximal volume and patient progression.</p>
+      <div class="coach__stats">
+        <div>
+          <div class="coach__stat-num">10</div>
+          <div class="coach__stat-label">Years coaching</div>
+        </div>
+        <div>
+          <div class="coach__stat-num">775</div>
+          <div class="coach__stat-label">kg competition total</div>
+        </div>
+      </div>
+      <div class="coach__creds">
+        <span class="coach__cred">USAPL-COACH</span>
+        <span class="coach__cred">CSCS</span>
+        <span class="coach__cred">NASM-CPT</span>
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="stories" id="stories">
+  <div class="section-header">
+    <div class="section-header__row">
+      <div>
+        <div class="section-header__label">
+          <span>05 / MEMBER STORIES</span>
+          <span class="dot">·</span>
+          <span class="silver">REAL CASES, MEASURED OUTCOMES</span>
+        </div>
+        <h2 class="section-header__title">Transformations documented <em>in numbers</em>, not in slogans.</h2>
+      </div>
+      <div class="section-header__meta">
+        <div>DEXA-VERIFIED / 12-MO MINIMUM</div>
+        <div>04 STORIES / <span>847 TOTAL</span></div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="stories__inner">
+    <div class="stories__list">
+      
+      <article class="story">
+        <div class="story__media">
+          <img src="https://picsum.photos/seed/story-anthony-portrait/800/700" alt="Anthony R." class="story__media-img">
+          <div class="story__media-tag">12-WK BLOCK · HYPERTROPHY</div>
+          <div class="story__media-num">01<span>/04</span></div>
+        </div>
+        <div class="story__content">
+          <div class="story__num-row">
+            <span>CASE 01 — ANTHONY R.</span>
+            <span>34 / MALE / 12 WEEKS</span>
+          </div>
+          <h3 class="story__name">Anthony R.<span>— 12 weeks, recomped.</span></h3>
+          <blockquote class="story__quote">"I'd lifted on and off for ten years without a plan. Forge gave me the plan — and the patience to actually run it. Twelve weeks in, I'm leaner, heavier, and stronger than I've ever been. The difference was the coaching, not the gym."</blockquote>
+          <div class="story__metrics">
+            <div class="story__metric">
+              <div class="story__metric-num">−11.2<span>kg</span></div>
+              <div class="story__metric-label">Fat mass / DEXA</div>
+            </div>
+            <div class="story__metric">
+              <div class="story__metric-num">+4.8<span>kg</span></div>
+              <div class="story__metric-label">Lean mass / DEXA</div>
+            </div>
+            <div class="story__metric">
+              <div class="story__metric-num">+38<span>%</span></div>
+              <div class="story__metric-label">Squat 1RM</div>
+            </div>
+          </div>
+          <div class="story__path">
+            <span>HYPERTROPHY ×2</span>
+            <span>NUTRITION L1</span>
+            <span>MOBILITY PRN</span>
+          </div>
+        </div>
+      </article>
+      
+      <article class="story story--reverse">
+        <div class="story__media">
+          <img src="https://picsum.photos/seed/story-sofia-portrait/800/700" alt="Sofia M." class="story__media-img">
+          <div class="story__media-tag">24-WK BLOCK · PERFORMANCE</div>
+          <div class="story__media-num">02<span>/04</span></div>
+        </div>
+        <div class="story__content">
+          <div class="story__num-row">
+            <span>CASE 02 — SOFIA M.</span>
+            <span>28 / FEMALE / 24 WEEKS</span>
+          </div>
+          <h3 class="story__name">Sofia M.<span>— from couch to platform.</span></h3>
+          <blockquote class="story__quote">"I'd never picked up a barbell before walking in. Twenty-four weeks later I totalled 320 kg at my first meet. The coaching staff treated my day-one self with the same patience they gave my week-twenty-four self. That's the whole thing."</blockquote>
+          <div class="story__metrics">
+            <div class="story__metric">
+              <div class="story__metric-num">320<span>kg</span></div>
+              <div class="story__metric-label">Meet total / USAPL</div>
+            </div>
+            <div class="story__metric">
+              <div class="story__metric-num">102.5<span>kg</span></div>
+              <div class="story__metric-label">Snatch 1RM</div>
+            </div>
+            <div class="story__metric">
+              <div class="story__metric-num">217.5<span>kg</span></div>
+              <div class="story__metric-label">C&J 1RM</div>
+            </div>
+          </div>
+          <div class="story__path">
+            <span>PERFORMANCE ×4</span>
+            <span>OLY CLINIC ×3</span>
+            <span>MOBILITY L1</span>
+          </div>
+        </div>
+      </article>
+      
+      <article class="story">
+        <div class="story__media">
+          <img src="https://picsum.photos/seed/story-derick-portrait/800/700" alt="Derick L." class="story__media-img">
+          <div class="story__media-tag">8-WK BLOCK · RETURN-TO-LIFT</div>
+          <div class="story__media-num">03<span>/04</span></div>
+        </div>
+        <div class="story__content">
+          <div class="story__num-row">
+            <span>CASE 03 — DERICK L.</span>
+            <span>41 / MALE / 8 WEEKS POST-REHAB</span>
+          </div>
+          <h3 class="story__name">Derick L.<span>— back from the brace.</span></h3>
+          <blockquote class="story__quote">"Eight months out of a lumbar discectomy when I called Forge. Yuki screened me, Marcus wrote the program, and I deadlifted 200 kg eleven months post-op. The medical team cleared me; Forge made me believe it."</blockquote>
+          <div class="story__metrics">
+            <div class="story__metric">
+              <div class="story__metric-num">200<span>kg</span></div>
+              <div class="story__metric-label">Deadlift 1RM post-op</div>
+            </div>
+            <div class="story__metric">
+              <div class="story__metric-num">0<span>setbacks</span></div>
+              <div class="story__metric-label">Across 8-week block</div>
+            </div>
+            <div class="story__metric">
+              <div class="story__metric-num">11<span>mo</span></div>
+              <div class="story__metric-label">Post-op to 1RM</div>
+            </div>
+          </div>
+          <div class="story__path">
+            <span>RETURN-TO-LIFT</span>
+            <span>MOBILITY ×3</span>
+            <span>STRENGTH ×2</span>
+          </div>
+        </div>
+      </article>
+      
+      <article class="story story--reverse">
+        <div class="story__media">
+          <img src="https://picsum.photos/seed/story-maya-portrait/800/700" alt="Maya K." class="story__media-img">
+          <div class="story__media-tag">16-WK BLOCK · PHYSIQUE</div>
+          <div class="story__media-num">04<span>/04</span></div>
+        </div>
+        <div class="story__content">
+          <div class="story__num-row">
+            <span>CASE 04 — MAYA K.</span>
+            <span>31 / FEMALE / 16 WEEKS</span>
+          </div>
+          <h3 class="story__name">Maya K.<span>— third at regionals.</span></h3>
+          <blockquote class="story__quote">"I came in wanting to look better. I left wanting to lift better. The coaching reframed everything — physique became the byproduct of practice, not the goal of punishment. Sixteen weeks, third place at my first regional. Already prepping for next year."</blockquote>
+          <div class="story__metrics">
+            <div class="story__metric">
+              <div class="story__metric-num">3<span>rd</span></div>
+              <div class="story__metric-label">Regional / figure</div>
+            </div>
+            <div class="story__metric">
+              <div class="story__metric-num">−7.4<span>%</span></div>
+              <div class="story__metric-label">Body fat / 16 wk</div>
+            </div>
+            <div class="story__metric">
+              <div class="story__metric-num">+6.2<span>kg</span></div>
+              <div class="story__metric-label">Lean mass retained</div>
+            </div>
+          </div>
+          <div class="story__path">
+            <span>HYPERTROPHY ×3</span>
+            <span>CONDITIONING ×2</span>
+            <span>STAGE-PREP L1</span>
+          </div>
+        </div>
+      </article>
+      
+    </div>
+  </div>
+</section>
+
+<section class="schedule" id="schedule">
+  <div class="schedule__inner">
+    <div class="section-header" style="padding-left: 0; padding-right: 0;">
+      <div class="section-header__row">
+        <div>
+          <div class="section-header__label">
+            <span>06 / WEEKLY SCHEDULE</span>
+            <span class="dot">·</span>
+            <span class="silver">05:00 — 22:00, MON-FRI</span>
+          </div>
+          <h2 class="section-header__title">The floor <em>is open</em> from 5am.</h2>
+        </div>
+        <div class="section-header__meta">
+          <div>COACH-LED / 12 SLOTS DAILY</div>
+          <div>OPEN GYM <span>05:00 — 22:00</span></div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="schedule__grid">
+      <div class="schedule__day">
+        <div class="schedule__day-name"><span>MON</span> <span>05—22</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">05:30</span><span class="schedule__slot-class">HYPERTROPHY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">07:00</span><span class="schedule__slot-class">CONDITIONING</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">12:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">17:00</span><span class="schedule__slot-class">PERFORMANCE</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">18:30</span><span class="schedule__slot-class">HYPERTROPHY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">20:00</span><span class="schedule__slot-class">MOBILITY</span></div>
+      </div>
+      <div class="schedule__day">
+        <div class="schedule__day-name"><span>TUE</span> <span>05—22</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">05:30</span><span class="schedule__slot-class">PERFORMANCE</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">07:00</span><span class="schedule__slot-class">HYPERTROPHY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">12:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">17:00</span><span class="schedule__slot-class">OLY PLATFORM</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">18:30</span><span class="schedule__slot-class">CONDITIONING</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">20:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+      </div>
+      <div class="schedule__day">
+        <div class="schedule__day-name"><span>WED</span> <span>05—22</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">05:30</span><span class="schedule__slot-class">HYPERTROPHY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">07:00</span><span class="schedule__slot-class">CONDITIONING</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">12:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">17:00</span><span class="schedule__slot-class">PERFORMANCE</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">18:30</span><span class="schedule__slot-class">HYPERTROPHY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">20:00</span><span class="schedule__slot-class">MOBILITY</span></div>
+      </div>
+      <div class="schedule__day">
+        <div class="schedule__day-name"><span>THU</span> <span>05—22</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">05:30</span><span class="schedule__slot-class">PERFORMANCE</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">07:00</span><span class="schedule__slot-class">HYPERTROPHY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">12:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">17:00</span><span class="schedule__slot-class">OLY PLATFORM</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">18:30</span><span class="schedule__slot-class">CONDITIONING</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">20:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+      </div>
+      <div class="schedule__day">
+        <div class="schedule__day-name"><span>FRI</span> <span>05—22</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">05:30</span><span class="schedule__slot-class">HYPERTROPHY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">07:00</span><span class="schedule__slot-class">CONDITIONING</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">12:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">17:00</span><span class="schedule__slot-class">PERFORMANCE</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">18:30</span><span class="schedule__slot-class">MOCK MEET</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">20:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+      </div>
+      <div class="schedule__day">
+        <div class="schedule__day-name"><span>SAT</span> <span>07—19</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">07:30</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">09:00</span><span class="schedule__slot-class">OLY CLINIC</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">11:00</span><span class="schedule__slot-class">HYPERTROPHY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">13:00</span><span class="schedule__slot-class">MOBILITY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">15:00</span><span class="schedule__slot-class">CONDITIONING</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">17:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+      </div>
+      <div class="schedule__day">
+        <div class="schedule__day-name"><span>SUN</span> <span>07—19</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">07:30</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">09:00</span><span class="schedule__slot-class">RECOVERY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">11:00</span><span class="schedule__slot-class">NUTRITION SEMINAR</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">13:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">15:00</span><span class="schedule__slot-class">MOBILITY</span></div>
+        <div class="schedule__slot"><span class="schedule__slot-time">17:00</span><span class="schedule__slot-class">OPEN LIFT</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="book" id="book">
+  <div class="book__bg-text">FORGE</div>
+  <div class="book__inner">
+    <div class="book__left">
+      <div class="book__label">
+        <span>07 / BOOK A TRIAL</span>
+        <span class="dot">·</span>
+        <span class="silver">FREE 60-MIN MOVEMENT SCREEN</span>
+      </div>
+      <h2 class="book__title">Step on the floor. <em>Once.</em></h2>
+      <p class="book__desc">A free 60-minute session with a head coach. Movement screen, goal-setting, track recommendation. No sales script. No pressure. Decide after you've trained with us, not before.</p>
+      
+      <div class="book__contact">
+        <div class="book__contact-row"><span>ADDRESS</span><span>412 W 7TH AVE, DOWNTOWN</span></div>
+        <div class="book__contact-row"><span>HOURS</span><span>MON-FRI 05:00—22:00 · SAT-SUN 07:00—19:00</span></div>
+        <div class="book__contact-row"><span>PHONE</span><span>(555) 014-2287</span></div>
+        <div class="book__contact-row"><span>EMAIL</span><span>TRAIN@FORGE-ATHLETIC.COM</span></div>
+        <div class="book__contact-row"><span>RESPONSE</span><span>WITHIN 4 BUSINESS HOURS</span></div>
+      </div>
+    </div>
+    
+    <form class="book__form" id="book-form">
+      <div class="book__form-group">
+        <label class="book__form-label">— Full name</label>
+        <input type="text" class="book__form-input" placeholder="First and last" required>
+      </div>
+      <div class="book__form-row">
+        <div class="book__form-group">
+          <label class="book__form-label">— Email</label>
+          <input type="email" class="book__form-input" placeholder="you@email.com" required>
+        </div>
+        <div class="book__form-group">
+          <label class="book__form-label">— Phone</label>
+          <input type="tel" class="book__form-input" placeholder="(555) 000-0000" required>
+        </div>
+      </div>
+      <div class="book__form-row">
+        <div class="book__form-group">
+          <label class="book__form-label">— Primary goal</label>
+          <select class="book__form-select" required>
+            <option value="">Select track</option>
+            <option>Hypertrophy / muscle gain</option>
+            <option>Conditioning / fat loss</option>
+            <option>Performance / fitness</option>
+            <option>Not sure yet</option>
+          </select>
+        </div>
+        <div class="book__form-group">
+          <label class="book__form-label">— Preferred day</label>
+          <select class="book__form-select" required>
+            <option value="">Select day</option>
+            <option>Monday</option>
+            <option>Tuesday</option>
+            <option>Wednesday</option>
+            <option>Thursday</option>
+            <option>Friday</option>
+            <option>Saturday</option>
+            <option>Sunday</option>
+          </select>
+        </div>
+      </div>
+      <div class="book__form-group">
+        <label class="book__form-label">— Training history (optional)</label>
+        <input type="text" class="book__form-input" placeholder="Years lifting, current program, injuries">
+      </div>
+      <button type="submit" class="book__form-submit" id="book-submit">
+        Book trial session
+        <svg viewBox="0 0 14 14" fill="none"><path d="M1 7h12M8 2l5 5-5 5" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+      <p class="book__form-note">— BY SUBMITTING YOU AGREE TO RECEIVE A CALL FROM A FORGE COACH. NO NEWSLETTER. NO MARKETING LIST. ONE CALL, ONE CONVERSATION.</p>
+    </form>
+  </div>
+</section>
+
+<footer class="footer">
+  <div class="footer__inner">
+    <div class="footer__top">
+      <div>
+        <div class="footer__brand">
+          <span class="footer__brand-mark"></span>
+          FORGE <span>/</span> ATHLETIC
+        </div>
+        <p class="footer__tagline">A coaching collective for serious lifters. Downtown, since 2018. Twelve coaches. Three disciplines. One community built under iron.</p>
+      </div>
+      <div class="footer__col">
+        <div class="footer__col-title">— Train</div>
+        <ul>
+          <li><a href="#curriculum">Hypertrophy</a></li>
+          <li><a href="#curriculum">Conditioning</a></li>
+          <li><a href="#curriculum">Performance</a></li>
+          <li><a href="#book">Free trial</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <div class="footer__col-title">— Studio</div>
+        <ul>
+          <li><a href="#coaches">Coaching staff</a></li>
+          <li><a href="#stories">Member stories</a></li>
+          <li><a href="#schedule">Weekly schedule</a></li>
+          <li><a href="#">Facilities</a></li>
+        </ul>
+      </div>
+      <div class="footer__col">
+        <div class="footer__col-title">— Contact</div>
+        <ul>
+          <li>412 W 7th Ave</li>
+          <li>(555) 014-2287</li>
+          <li>train@forge-athletic.com</li>
+          <li>@forge.athletic</li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer__bottom">
+      <span>© <span class="silver">FORGE ATHLETIC COLLECTIVE</span> / EST. 2018</span>
+      <span>BUILT <span class="silver">BY THE FLOOR</span> · DOWNTOWN, 7TH AVE</span>
+    </div>
+  </div>
+</footer>
+
+<script src='https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js'></script>
+<script src='https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js'></script>
+<script type='importmap'>
+{ "imports": { "three": "https://unpkg.com/three@0.183/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const isTouch = window.matchMedia('(hover: none), (pointer: coarse)').matches;
+
+gsap.registerPlugin(ScrollTrigger);
+
+/* =================== CUSTOM CURSOR =================== */
+if (!isTouch) {
+  const cursor = document.getElementById('custom-cursor');
+  const target = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+  const pos = { x: target.x, y: target.y };
+  let hover = false;
+  
+  addEventListener('mousemove', e => {
+    target.x = e.clientX; target.y = e.clientY;
+  });
+  
+  addEventListener('mouseover', e => {
+    const t = e.target;
+    hover = !!(t.closest('a, button, [data-cursor-hover], input, select, .coach, .curriculum__card, .schedule__slot, .stat'));
+  });
+  
+  (function loop() {
+    pos.x += (target.x - pos.x) * 0.18;
+    pos.y += (target.y - pos.y) * 0.18;
+    const s = hover ? 44 : 10;
+    cursor.style.transform = `translate(${pos.x - s/2}px, ${pos.y - s/2}px)`;
+    cursor.style.width = cursor.style.height = s + 'px';
+    cursor.style.opacity = hover ? 0.6 : 1;
+    requestAnimationFrame(loop);
+  })();
+}
+
+/* =================== PARTICLE FIELD =================== */
+let particleAnimating = false;
+
+function initParticles() {
+  if (reducedMotion) return;
+  const canvas = document.getElementById('particle-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.z = 8;
+  
+  const isMobile = window.innerWidth < 768;
+  const COUNT_PRIMARY = isMobile ? 600 : 1300;
+  const COUNT_SECONDARY = isMobile ? 120 : 240;
+  
+  function makePoints(count, colorHex, sizeMul) {
+    const positions = new Float32Array(count * 3);
+    const sizes = new Float32Array(count);
+    const offsets = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      positions[i*3] = (Math.random()-0.5) * 22;
+      positions[i*3+1] = (Math.random()-0.5) * 14;
+      positions[i*3+2] = (Math.random()-0.5) * 12;
+      sizes[i] = (Math.random() * 1.6 + 0.4) * sizeMul;
+      offsets[i] = Math.random() * Math.PI * 2;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    geo.setAttribute('aOffset', new THREE.BufferAttribute(offsets, 1));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 }, uColor: { value: new THREE.Color(colorHex) } },
+      vertexShader: `
+        attribute float aSize; attribute float aOffset; uniform float uTime; varying float vAlpha;
         void main() {
-            gl_Position = vec4(aPos, 0.0, 1.0);
-        }
-    </script>
-
-    <script id="fragmentShader" type="x-shader/x-fragment">#version 300 es
-        precision highp float;
-        
-        out vec4 FragColor;
-        
-        #define MAX_BOUNCES 4
-        #define PI 3.14159265
-
-        uniform vec2 uResolution;
-        uniform float uTime;
-        uniform vec3 uCamPos;
-        uniform vec3 uCamTarget;
-
-        // Object Uniforms
-        uniform vec3 uSpherePos;    uniform vec4 uSphereMat;    // Mat: rgb, refl
-        uniform vec4 uSphereProps;  // Props: rough, transp, ior, unused
-        
-        uniform vec3 uCubePos;      uniform vec4 uCubeMat;
-        uniform vec4 uCubeProps;
-        
-        uniform vec3 uPyrPos;       uniform vec4 uPyrMat;
-        uniform vec4 uPyrProps;
-
-        struct Material {
-            vec3 albedo;
-            float reflectivity;
-            float roughness;
-            float transparency;
-            float ior;
-        };
-
-        struct Hit {
-            float t;
-            vec3 normal;
-            Material mat;
-            bool isHit;
-        };
-
-        // --- HASH & NOISE for Roughness ---
-        float hash(vec2 p) {
-            return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-        }
-
-        // --- INTERSECTION FUNCTIONS ---
-        float intersectSphere(vec3 ro, vec3 rd, vec3 ce, float ra) {
-            vec3 oc = ro - ce;
-            float b = dot(oc, rd);
-            float c = dot(oc, oc) - ra*ra;
-            float h = b*b - c;
-            if(h < 0.0) return -1.0;
-            h = sqrt(h);
-            float t = -b - h;
-            if(t < 0.001) t = -b + h;
-            return t < 0.001 ? -1.0 : t;
-        }
-
-        // Axis-Aligned Cube Intersection
-        float intersectCube(vec3 ro, vec3 rd, vec3 minBox, vec3 maxBox) {
-            vec3 tMin = (minBox - ro) / rd;
-            vec3 tMax = (maxBox - ro) / rd;
-            vec3 t1 = min(tMin, tMax);
-            vec3 t2 = max(tMin, tMax);
-            float tNear = max(max(t1.x, t1.y), t1.z);
-            float tFar = min(min(t2.x, t2.y), t2.z);
-            if(tNear > tFar || tFar < 0.001) return -1.0;
-            return tNear > 0.001 ? tNear : tFar;
-        }
-
-        vec3 getCubeNormal(vec3 p, vec3 minBox, vec3 maxBox) {
-            vec3 c = (minBox + maxBox) * 0.5;
-            vec3 d = (p - c) / ((maxBox - minBox) * 0.5);
-            vec3 absD = abs(d);
-            if (absD.x > absD.y && absD.x > absD.z) return vec3(sign(d.x), 0.0, 0.0);
-            if (absD.y > absD.z) return vec3(0.0, sign(d.y), 0.0);
-            return vec3(0.0, 0.0, sign(d.z));
-        }
-
-        // Triangle Intersection (For Pyramid)
-        float intersectTri(vec3 ro, vec3 rd, vec3 v0, vec3 v1, vec3 v2, out vec3 normal) {
-            vec3 v1v0 = v1 - v0;
-            vec3 v2v0 = v2 - v0;
-            vec3 rov0 = ro - v0;
-            vec3 n = cross(v1v0, v2v0);
-            vec3 q = cross(rov0, rd);
-            float d = 1.0 / dot(rd, n);
-            float u = d * dot(-q, v2v0);
-            float v = d * dot(q, v1v0);
-            float t = d * dot(-n, rov0);
-            if (u < 0.0 || v < 0.0 || (u+v) > 1.0 || t < 0.001) return -1.0;
-            
-            normal = normalize(n);
-            if (dot(normal, rd) > 0.0) normal = -normal; // Face forward
-            return t;
-        }
-
-        // Square-based Pyramid
-        float intersectPyramid(vec3 ro, vec3 rd, vec3 center, float size, float height, out vec3 normal) {
-            float bestT = 1e9;
-            vec3 bestN = vec3(0.0);
-            float t;
-            vec3 n;
-            
-            vec3 v0 = center + vec3(-size, 0.0, -size);
-            vec3 v1 = center + vec3( size, 0.0, -size);
-            vec3 v2 = center + vec3( size, 0.0,  size);
-            vec3 v3 = center + vec3(-size, 0.0,  size);
-            vec3 apex = center + vec3(0.0, height, 0.0);
-            
-            t = intersectTri(ro, rd, v0, v1, apex, n); if (t > 0.0 && t < bestT) { bestT = t; bestN = n; }
-            t = intersectTri(ro, rd, v1, v2, apex, n); if (t > 0.0 && t < bestT) { bestT = t; bestN = n; }
-            t = intersectTri(ro, rd, v2, v3, apex, n); if (t > 0.0 && t < bestT) { bestT = t; bestN = n; }
-            t = intersectTri(ro, rd, v3, v0, apex, n); if (t > 0.0 && t < bestT) { bestT = t; bestN = n; }
-            
-            normal = bestN;
-            return bestT < 1e9 ? bestT : -1.0;
-        }
-
-        // Plane Intersection (Ground)
-        float intersectPlane(vec3 ro, vec3 rd, float y) {
-            if (abs(rd.y) < 0.001) return -1.0;
-            float t = (y - ro.y) / rd.y;
-            return t > 0.001 ? t : -1.0;
-        }
-
-        // --- SCENE INTERSECTION ---
-        Hit intersectScene(vec3 ro, vec3 rd) {
-            Hit hit;
-            hit.t = 1e9;
-            hit.isHit = false;
-
-            // Ground
-            float tGround = intersectPlane(ro, rd, 0.0);
-            if (tGround > 0.0 && tGround < hit.t) {
-                hit.t = tGround;
-                hit.isHit = true;
-                hit.normal = vec3(0.0, 1.0, 0.0);
-                vec3 p = ro + rd * tGround;
-                float check = mod(floor(p.x) + floor(p.z), 2.0);
-                hit.mat.albedo = mix(vec3(0.9), vec3(0.1), check);
-                hit.mat.reflectivity = 0.2;
-                hit.mat.roughness = 0.0;
-                hit.mat.transparency = 0.0;
-                hit.mat.ior = 1.0;
-            }
-
-            // Sphere
-            float tSphere = intersectSphere(ro, rd, uSpherePos, 1.0);
-            if (tSphere > 0.0 && tSphere < hit.t) {
-                hit.t = tSphere;
-                hit.isHit = true;
-                vec3 p = ro + rd * tSphere;
-                hit.normal = normalize(p - uSpherePos);
-                hit.mat.albedo = uSphereMat.rgb;
-                hit.mat.reflectivity = uSphereMat.w;
-                hit.mat.roughness = uSphereProps.x;
-                hit.mat.transparency = uSphereProps.y;
-                hit.mat.ior = uSphereProps.z;
-            }
-
-            // Cube
-            vec3 cubeMin = uCubePos - vec3(1.0);
-            vec3 cubeMax = uCubePos + vec3(1.0);
-            float tCube = intersectCube(ro, rd, cubeMin, cubeMax);
-            if (tCube > 0.0 && tCube < hit.t) {
-                hit.t = tCube;
-                hit.isHit = true;
-                vec3 p = ro + rd * tCube;
-                hit.normal = getCubeNormal(p, cubeMin, cubeMax);
-                hit.mat.albedo = uCubeMat.rgb;
-                hit.mat.reflectivity = uCubeMat.w;
-                hit.mat.roughness = uCubeProps.x;
-                hit.mat.transparency = uCubeProps.y;
-                hit.mat.ior = uCubeProps.z;
-            }
-
-            // Pyramid
-            vec3 pyrN;
-            float tPyr = intersectPyramid(ro, rd, uPyrPos, 1.0, 2.0, pyrN);
-            if (tPyr > 0.0 && tPyr < hit.t) {
-                hit.t = tPyr;
-                hit.isHit = true;
-                hit.normal = pyrN;
-                hit.mat.albedo = uPyrMat.rgb;
-                hit.mat.reflectivity = uPyrMat.w;
-                hit.mat.roughness = uPyrProps.x;
-                hit.mat.transparency = uPyrProps.y;
-                hit.mat.ior = uPyrProps.z;
-            }
-
-            return hit;
-        }
-
-        // Shadow check (simplified, ignores transparency for performance)
-        bool inShadow(vec3 ro, vec3 rd, float maxDist) {
-            if (intersectSphere(ro, rd, uSpherePos, 1.0) > 0.0 && intersectSphere(ro, rd, uSpherePos, 1.0) < maxDist) return true;
-            
-            vec3 cubeMin = uCubePos - vec3(1.0);
-            vec3 cubeMax = uCubePos + vec3(1.0);
-            if (intersectCube(ro, rd, cubeMin, cubeMax) > 0.0 && intersectCube(ro, rd, cubeMin, cubeMax) < maxDist) return true;
-            
-            vec3 pyrN;
-            if (intersectPyramid(ro, rd, uPyrPos, 1.0, 2.0, pyrN) > 0.0 && intersectPyramid(ro, rd, uPyrPos, 1.0, 2.0, pyrN) < maxDist) return true;
-            
-            return false;
-        }
-
-        vec3 skyColor(vec3 rd) {
-            float t = 0.5 * (rd.y + 1.0);
-            vec3 horizon = vec3(1.0, 1.0, 1.0);
-            vec3 zenith = vec3(0.2, 0.5, 0.9);
-            vec3 sky = mix(horizon, zenith, t);
-            
-            // Sun
-            vec3 sunDir = normalize(vec3(1.0, 0.8, -0.5));
-            float sun = max(dot(rd, sunDir), 0.0);
-            sky += vec3(1.0, 0.8, 0.4) * pow(sun, 128.0) * 2.0; // Sun disk
-            sky += vec3(1.0, 0.8, 0.4) * pow(sun, 8.0) * 0.3; // Sun glow
-            
-            return sky;
-        }
-
-        // --- RAY TRACER ---
-        vec3 trace(vec3 ro, vec3 rd) {
-            vec3 col = vec3(0.0);
-            vec3 throughput = vec3(1.0);
-            
-            for(int i=0; i<MAX_BOUNCES; i++) {
-                Hit hit = intersectScene(ro, rd);
-                
-                if (!hit.isHit) {
-                    col += throughput * skyColor(rd);
-                    break;
-                }
-                
-                vec3 p = ro + rd * hit.t;
-                vec3 n = hit.normal;
-                
-                // Lighting (Sun + Ambient Sky)
-                vec3 lightDir = normalize(vec3(1.0, 0.8, -0.5));
-                float diff = max(dot(n, lightDir), 0.0);
-                
-                bool shadowed = inShadow(p + n * 0.01, lightDir, 50.0);
-                float shadow = shadowed ? 0.1 : 1.0;
-                
-                vec3 skyAmb = skyColor(n) * 0.3; // Ambient light from sky
-                vec3 directLight = hit.mat.albedo * (diff * shadow * vec3(1.0, 0.95, 0.8) + skyAmb);
-                
-                col += throughput * directLight * (1.0 - hit.mat.reflectivity - hit.mat.transparency);
-                
-                // Russian Roulette / Material Decision
-                float rand = hash(gl_FragCoord.xy + uTime + float(i) * 10.0);
-                
-                if (hit.mat.transparency > 0.0 && rand < hit.mat.transparency) {
-                    // Refraction / Transmission
-                    throughput *= hit.mat.albedo;
-                    float eta = dot(rd, n) < 0.0 ? 1.0 / hit.mat.ior : hit.mat.ior;
-                    vec3 refr = refract(rd, n, eta);
-                    if (length(refr) < 0.01) refr = reflect(rd, n); // Total internal reflection
-                    ro = p - n * 0.01;
-                    rd = normalize(refr);
-                } else if (hit.mat.reflectivity > 0.0 && rand < hit.mat.reflectivity + hit.mat.transparency) {
-                    // Reflection
-                    throughput *= hit.mat.albedo;
-                    vec3 refl = reflect(rd, n);
-                    // Add roughness by jittering the reflection vector
-                    vec3 jitter = vec3(hash(p.xy + i), hash(p.yz + i), hash(p.zx + i)) - 0.5;
-                    refl = normalize(refl + jitter * hit.mat.roughness);
-                    ro = p + n * 0.01;
-                    rd = refl;
-                } else {
-                    // Diffuse bounce (absorbed for simplicity)
-                    break;
-                }
-            }
-            return col;
-        }
-
+          vec3 p = position;
+          p.y += sin(uTime*0.3 + aOffset) * 0.4;
+          p.x += cos(uTime*0.25 + aOffset*0.7) * 0.2;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_PointSize = aSize * (180.0 / -mv.z);
+          gl_Position = projectionMatrix * mv;
+          vAlpha = 0.55 + 0.45 * sin(uTime*0.6 + aOffset);
+        }`,
+      fragmentShader: `
+        varying float vAlpha; uniform vec3 uColor;
         void main() {
-            vec2 uv = (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y;
-            
-            // Camera Setup
-            vec3 ro = uCamPos;
-            vec3 forward = normalize(uCamTarget - ro);
-            vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
-            vec3 up = cross(right, forward);
-            
-            vec3 rd = normalize(forward + uv.x * right + uv.y * up);
-            
-            vec3 col = trace(ro, rd);
-            
-            // Tone Mapping & Gamma Correction
-            col = col / (col + 1.0); // Reinhard tone mapping
-            col = pow(col, vec3(1.0/2.2)); // Gamma
-            
-            FragColor = vec4(col, 1.0);
+          vec2 uv = gl_PointCoord - vec2(0.5);
+          if (length(uv) > 0.5) discard;
+          gl_FragColor = vec4(uColor, smoothstep(0.5, 0.0, length(uv)) * vAlpha * 0.55);
+        }`,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    return new THREE.Points(geo, mat);
+  }
+  
+  const primary = makePoints(COUNT_PRIMARY, 0xff5c00, 1.0);
+  const secondary = makePoints(COUNT_SECONDARY, 0xffffff, 0.7);
+  scene.add(primary);
+  scene.add(secondary);
+  
+  const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
+  addEventListener('mousemove', e => {
+    mouse.tx = (e.clientX / window.innerWidth - 0.5) * 2;
+    mouse.ty = (e.clientY / window.innerHeight - 0.5) * 2;
+  });
+  
+  let time = 0;
+  function tick() {
+    if (!particleAnimating) return;
+    time += 0.016;
+    mouse.x += (mouse.tx - mouse.x) * 0.05;
+    mouse.y += (mouse.ty - mouse.y) * 0.05;
+    primary.rotation.y = mouse.x * 0.3;
+    primary.rotation.x = mouse.y * 0.15;
+    secondary.rotation.y = mouse.x * 0.4 + time * 0.02;
+    secondary.rotation.x = mouse.y * 0.2;
+    primary.material.uniforms.uTime.value = time;
+    secondary.material.uniforms.uTime.value = time;
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
+  
+  particleAnimating = true;
+  tick();
+  
+  const io = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      particleAnimating = e.isIntersecting;
+      if (particleAnimating) tick();
+    });
+  });
+  io.observe(canvas);
+  
+  addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+initParticles();
+
+/* =================== HERO 4-BEAT CADENCE =================== */
+function initHero() {
+  const tl = gsap.timeline({ delay: 0.4 });
+  tl.fromTo('#hero-eyebrow', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.7, ease: 'power2.out' })
+    .fromTo('#hero-title', { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 1.1, ease: 'power3.out' }, '-=0.3')
+    .fromTo('#hero-sub', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out' }, '-=0.5')
+    .fromTo('#hero-cta', { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.7, ease: 'power2.out' }, '-=0.4');
+  
+  gsap.fromTo('.hero__portrait', { opacity: 0, scale: 1.05 }, { opacity: 1, scale: 1, duration: 1.4, ease: 'power3.out', delay: 0.2 });
+  gsap.fromTo('.hero__bg-text', { opacity: 0 }, { opacity: 1, duration: 2, delay: 0.5 });
+  gsap.fromTo('.nav', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.8, ease: 'power2.out' });
+}
+initHero();
+
+/* =================== MANIFESTO SCRUB-BLUR-WORDS =================== */
+function initManifesto() {
+  const textEl = document.getElementById('manifesto-text');
+  if (!textEl) return;
+  
+  document.fonts.ready.then(() => {
+    const text = textEl.textContent.trim();
+    const words = text.split(/\s+/);
+    const accentSet = new Set(['strength','debt','sweat','discipline','bar','stop','brutal','craft','decades','collective']);
+    textEl.innerHTML = words.map(w => {
+      const stripped = w.toLowerCase().replace(/[^a-z]/g, '');
+      let cls = 'word';
+      if (accentSet.has(stripped)) cls += ' word--accent';
+      return `<span class="${cls}">${w}</span>`;
+    }).join(' ');
+    
+    if (reducedMotion) {
+      gsap.set('.manifesto__text .word', { opacity: 1, filter: 'none' });
+      return;
+    }
+    
+    gsap.timeline({
+      scrollTrigger: {
+        trigger: '#manifesto',
+        start: 'top 78%',
+        end: 'center 50%',
+        scrub: true,
+      },
+    }).fromTo('.manifesto__text .word',
+      { opacity: 0, filter: 'blur(12px) brightness(30%)' },
+      { opacity: 1, filter: 'blur(0px) brightness(100%)', stagger: 0.04, ease: 'sine.out' });
+  });
+}
+initManifesto();
+
+/* =================== CURRICULUM HORIZONTAL PIN =================== */
+function initCurriculum() {
+  const viewport = document.getElementById('curriculum-viewport');
+  const track = document.getElementById('curriculum-track');
+  const progress = document.getElementById('curriculum-progress');
+  const cardNumEl = document.getElementById('curr-card-num');
+  if (!viewport || !track) return;
+  
+  if (window.innerWidth < 968) return;
+  
+  let scrollWidth = 0;
+  let lastY = window.scrollY;
+  const totalCards = track.querySelectorAll('.curriculum__card').length;
+  
+  function recalc() {
+    scrollWidth = track.scrollWidth - window.innerWidth;
+    viewport.style.height = (window.innerHeight + Math.max(0, scrollWidth)) + 'px';
+  }
+  recalc();
+  addEventListener('resize', () => {
+    if (window.innerWidth < 968) {
+      viewport.style.height = '';
+      return;
+    }
+    recalc();
+  });
+  
+  let skewTimer;
+  addEventListener('scroll', () => {
+    const rect = viewport.getBoundingClientRect();
+    if (rect.top <= 0 && rect.top >= -scrollWidth) {
+      const p = (-rect.top) / scrollWidth;
+      track.style.transform = `translate3d(${-p * scrollWidth}px,0,0)`;
+      if (progress) progress.style.width = (p * 100) + '%';
+      if (cardNumEl) {
+        const current = Math.min(totalCards, Math.floor(p * totalCards) + 1);
+        cardNumEl.textContent = String(current).padStart(2, '0');
+      }
+      
+      const v = window.scrollY - lastY;
+      lastY = window.scrollY;
+      const skew = Math.max(-8, Math.min(8, v * 0.4));
+      track.querySelectorAll('.curriculum__card').forEach(c => c.style.transform = `skewX(${skew}deg)`);
+      clearTimeout(skewTimer);
+      skewTimer = setTimeout(() => {
+        track.querySelectorAll('.curriculum__card').forEach(c => c.style.transform = 'skewX(0deg)');
+      }, 180);
+    } else {
+      lastY = window.scrollY;
+    }
+  }, { passive: true });
+}
+initCurriculum();
+
+/* =================== FADE UP OBSERVER =================== */
+function initFadeUp() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('is-in');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+  
+  document.querySelectorAll('.stat, .coach, .story, .schedule__day, .footer__col').forEach(el => {
+    el.classList.add('fade-up');
+    observer.observe(el);
+  });
+  
+  const stats = document.querySelectorAll('.stat');
+  stats.forEach((s, i) => s.style.transitionDelay = (i * 0.08) + 's');
+  
+  const coaches = document.querySelectorAll('.coach');
+  coaches.forEach((c, i) => c.style.transitionDelay = (i * 0.06) + 's');
+  
+  const stories = document.querySelectorAll('.story');
+  stories.forEach((s, i) => s.style.transitionDelay = (i * 0.1) + 's');
+  
+  const days = document.querySelectorAll('.schedule__day');
+  days.forEach((d, i) => d.style.transitionDelay = (i * 0.05) + 's');
+}
+initFadeUp();
+
+/* =================== COACH 3D ROTATE-Y (mouse-driven) =================== */
+function initCoachTilt() {
+  if (isTouch) return;
+  
+  document.querySelectorAll('.coach').forEach(card => {
+    const inner = card.querySelector('.coach__inner');
+    if (!inner) return;
+    
+    card.addEventListener('mousemove', e => {
+      const rect = card.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
+      const ry = x * 16;
+      const rx = -y * 8;
+      inner.style.transform = `rotateY(${ry}deg) rotateX(${rx}deg)`;
+    });
+    
+    card.addEventListener('mouseleave', () => {
+      inner.style.transform = 'rotateY(0deg) rotateX(0deg)';
+    });
+  });
+}
+initCoachTilt();
+
+/* =================== STAT COUNT-UP =================== */
+function initCountUp() {
+  const nums = document.querySelectorAll('.stat__num');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const el = entry.target;
+        const html = el.innerHTML;
+        const match = html.match(/(\d+)/);
+        if (!match) return;
+        const final = parseInt(match[1], 10);
+        const originalNumberStr = match[1];
+        const unitHtml = html.substring(match.index + match[1].length);
+        const start = performance.now();
+        const duration = 1500;
+        function tick(now) {
+          const t = Math.min((now - start) / duration, 1);
+          const eased = 1 - Math.pow(1 - t, 3);
+          const current = Math.floor(final * eased);
+          const padded = String(current).padStart(originalNumberStr.length, '0');
+          el.innerHTML = padded + unitHtml;
+          if (t < 1) requestAnimationFrame(tick);
+          else el.innerHTML = originalNumberStr + unitHtml;
         }
-    </script>
+        requestAnimationFrame(tick);
+        observer.unobserve(el);
+      }
+    });
+  }, { threshold: 0.5 });
+  
+  nums.forEach(n => observer.observe(n));
+}
+initCountUp();
 
-    <script>
-        const canvas = document.getElementById('canvas');
-        const gl = canvas.getContext('webgl2');
-        if (!gl) { alert("WebGL2 not supported!"); }
+/* =================== BOOK TRIAL FORM =================== */
+function initBookForm() {
+  const form = document.getElementById('book-form');
+  const btn = document.getElementById('book-submit');
+  if (!form || !btn) return;
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    btn.innerHTML = 'Submitted — we will call you <svg viewBox="0 0 14 14" fill="none"><path d="M1 7l4 4 8-8" stroke="currentColor" stroke-width="2"/></svg>';
+    btn.style.background = 'var(--text)';
+  });
+}
+initBookForm();
 
-        // Resize canvas
-        function resize() {
-            // Render at slightly lower resolution for performance if needed, 
-            // but 1.0 is usually fine for simple scenes. Let's use 0.8 for speed.
-            const scale = 0.8; 
-            canvas.width = window.innerWidth * scale;
-            canvas.height = window.innerHeight * scale;
-            canvas.style.width = window.innerWidth + 'px';
-            canvas.style.height = window.innerHeight + 'px';
-        }
-        window.addEventListener('resize', resize);
-        resize();
-
-        // --- SHADER COMPILATION ---
-        function compileShader(src, type) {
-            const shader = gl.createShader(type);
-            gl.shaderSource(shader, src);
-            gl.compileShader(shader);
-            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-                console.error(gl.getShaderInfoLog(shader));
-            }
-            return shader;
-        }
-
-        const vs = compileShader(document.getElementById('vertexShader').textContent, gl.VERTEX_SHADER);
-        const fs = compileShader(document.getElementById('fragmentShader').textContent, gl.FRAGMENT_SHADER);
-
-        const program = gl.createProgram();
-        gl.attachShader(program, vs);
-        gl.attachShader(program, fs);
-        gl.linkProgram(program);
-        gl.useProgram(program);
-
-        // Fullscreen Quad
-        const verts = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
-        const vbo = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-        gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
-        
-        const aPosLoc = gl.getAttribLocation(program, 'aPos');
-        gl.enableVertexAttribArray(aPosLoc);
-        gl.vertexAttribPointer(aPosLoc, 2, gl.FLOAT, false, 0, 0);
-
-        // Uniform Locations
-        const u = {
-            res: gl.getUniformLocation(program, 'uResolution'),
-            time: gl.getUniformLocation(program, 'uTime'),
-            camPos: gl.getUniformLocation(program, 'uCamPos'),
-            camTarget: gl.getUniformLocation(program, 'uCamTarget'),
-            
-            sPos: gl.getUniformLocation(program, 'uSpherePos'),
-            sMat: gl.getUniformLocation(program, 'uSphereMat'),
-            sProps: gl.getUniformLocation(program, 'uSphereProps'),
-            
-            cPos: gl.getUniformLocation(program, 'uCubePos'),
-            cMat: gl.getUniformLocation(program, 'uCubeMat'),
-            cProps: gl.getUniformLocation(program, 'uCubeProps'),
-            
-            pPos: gl.getUniformLocation(program, 'uPyrPos'),
-            pMat: gl.getUniformLocation(program, 'uPyrMat'),
-            pProps: gl.getUniformLocation(program, 'uPyrProps')
-        };
-
-        // --- STATE MANAGEMENT ---
-        const state = {
-            Sphere: { pos: [0, 1, 0], color: '#ff5555', refl: 0.8, rough: 0.0, transp: 0.0, ior: 1.5 },
-            Cube:   { pos: [3, 1, 0], color: '#55ff55', refl: 0.2, rough: 0.3, transp: 0.0, ior: 1.5 },
-            Pyramid:{ pos: [-3, 0, 0], color: '#5555ff', refl: 0.5, rough: 0.1, transp: 0.0, ior: 1.5 }
-        };
-
-        // Helper to convert hex to rgb 0-1
-        function hexToRgb(hex) {
-            let r = parseInt(hex.slice(1, 3), 16) / 255;
-            let g = parseInt(hex.slice(3, 5), 16) / 255;
-            let b = parseInt(hex.slice(5, 7), 16) / 255;
-            return [r, g, b];
-        }
-
-        // --- UI GENERATION ---
-        const controlsDiv = document.getElementById('controls');
-        
-        function buildUI() {
-            controlsDiv.innerHTML = '';
-            for (const objName in state) {
-                const obj = state[objName];
-                const group = document.createElement('div');
-                group.className = 'obj-group';
-                group.innerHTML = `
-                    <h3>${objName}</h3>
-                    
-                    <div class="control-row">
-                        <label>Color</label>
-                        <input type="color" value="${obj.color}" data-obj="${objName}" data-prop="color">
-                    </div>
-                    <div class="control-row">
-                        <label>Pos X</label>
-                        <input type="range" min="-5" max="5" step="0.1" value="${obj.pos[0]}" data-obj="${objName}" data-prop="pos" data-idx="0">
-                        <span class="val-display">${obj.pos[0].toFixed(1)}</span>
-                    </div>
-                    <div class="control-row">
-                        <label>Pos Y</label>
-                        <input type="range" min="0" max="5" step="0.1" value="${obj.pos[1]}" data-obj="${objName}" data-prop="pos" data-idx="1">
-                        <span class="val-display">${obj.pos[1].toFixed(1)}</span>
-                    </div>
-                    <div class="control-row">
-                        <label>Pos Z</label>
-                        <input type="range" min="-5" max="5" step="0.1" value="${obj.pos[2]}" data-obj="${objName}" data-prop="pos" data-idx="2">
-                        <span class="val-display">${obj.pos[2].toFixed(1)}</span>
-                    </div>
-                    <div class="control-row">
-                        <label>Reflectivity</label>
-                        <input type="range" min="0" max="1" step="0.01" value="${obj.refl}" data-obj="${objName}" data-prop="refl">
-                        <span class="val-display">${obj.refl.toFixed(2)}</span>
-                    </div>
-                    <div class="control-row">
-                        <label>Roughness</label>
-                        <input type="range" min="0" max="1" step="0.01" value="${obj.rough}" data-obj="${objName}" data-prop="rough">
-                        <span class="val-display">${obj.rough.toFixed(2)}</span>
-                    </div>
-                    <div class="control-row">
-                        <label>Transparency</label>
-                        <input type="range" min="0" max="1" step="0.01" value="${obj.transp}" data-obj="${objName}" data-prop="transp">
-                        <span class="val-display">${obj.transp.toFixed(2)}</span>
-                    </div>
-                    <div class="control-row">
-                        <label>IOR</label>
-                        <input type="range" min="1.0" max="2.5" step="0.01" value="${obj.ior}" data-obj="${objName}" data-prop="ior">
-                        <span class="val-display">${obj.ior.toFixed(2)}</span>
-                    </div>
-                `;
-                controlsDiv.appendChild(group);
-            }
-
-            // Attach listeners
-            document.querySelectorAll('input').forEach(input => {
-                input.addEventListener('input', (e) => {
-                    const target = e.target;
-                    const objName = target.dataset.obj;
-                    const prop = target.dataset.prop;
-                    const valDisplay = target.nextElementSibling;
-                    
-                    if (prop === 'color') {
-                        state[objName][prop] = target.value;
-                    } else if (prop === 'pos') {
-                        const idx = parseInt(target.dataset.idx);
-                        state[objName][prop][idx] = parseFloat(target.value);
-                        if(valDisplay) valDisplay.textContent = parseFloat(target.value).toFixed(1);
-                    } else {
-                        state[objName][prop] = parseFloat(target.value);
-                        if(valDisplay) valDisplay.textContent = parseFloat(target.value).toFixed(2);
-                    }
-                });
-            });
-        }
-        buildUI();
-
-        // --- CAMERA CONTROLS ---
-        let camTheta = 0.6; // Horizontal angle
-        let camPhi = 0.4;   // Vertical angle
-        let camDist = 10.0;
-        let isDragging = false;
-        let lastX, lastY;
-
-        canvas.addEventListener('mousedown', (e) => { isDragging = true; lastX = e.clientX; lastY = e.clientY; });
-        canvas.addEventListener('mouseup', () => isDragging = false);
-        canvas.addEventListener('mouseleave', () => isDragging = false);
-        canvas.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-            let dx = e.clientX - lastX;
-            let dy = e.clientY - lastY;
-            camTheta -= dx * 0.01;
-            camPhi += dy * 0.01;
-            // Clamp phi so we don't flip
-            camPhi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, camPhi));
-            lastX = e.clientX;
-            lastY = e.clientY;
-        });
-
-        canvas.addEventListener('wheel', (e) => {
-            camDist += e.deltaY * 0.01;
-            camDist = Math.max(4.0, Math.min(25.0, camDist));
-        });
-
-        // --- RENDER LOOP ---
-        let startTime = performance.now();
-        function render() {
-            const time = (performance.now() - startTime) / 1000.0;
-            
-            gl.viewport(0, 0, canvas.width, canvas.height);
-            gl.clearColor(0, 0, 0, 1);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-
-            // Update Camera
-            const camX = camDist * Math.sin(camTheta) * Math.cos(camPhi);
-            const camY = camDist * Math.sin(camPhi);
-            const camZ = camDist * Math.cos(camTheta) * Math.cos(camPhi);
-
-            // Set Uniforms
-            gl.uniform2f(u.res, canvas.width, canvas.height);
-            gl.uniform1f(u.time, time);
-            gl.uniform3f(u.camPos, camX, camY, camZ);
-            gl.uniform3f(u.camTarget, 0, 1, 0); // Look at center of scene
-
-            // Sphere
-            const sCol = hexToRgb(state.Sphere.color);
-            gl.uniform3f(u.sPos, state.Sphere.pos[0], state.Sphere.pos[1], state.Sphere.pos[2]);
-            gl.uniform4f(u.sMat, sCol[0], sCol[1], sCol[2], state.Sphere.refl);
-            gl.uniform4f(u.sProps, state.Sphere.rough, state.Sphere.transp, state.Sphere.ior, 0.0);
-
-            // Cube
-            const cCol = hexToRgb(state.Cube.color);
-            gl.uniform3f(u.cPos, state.Cube.pos[0], state.Cube.pos[1], state.Cube.pos[2]);
-            gl.uniform4f(u.cMat, cCol[0], cCol[1], cCol[2], state.Cube.refl);
-            gl.uniform4f(u.cProps, state.Cube.rough, state.Cube.transp, state.Cube.ior, 0.0);
-
-            // Pyramid
-            const pCol = hexToRgb(state.Pyramid.color);
-            gl.uniform3f(u.pPos, state.Pyramid.pos[0], state.Pyramid.pos[1], state.Pyramid.pos[2]);
-            gl.uniform4f(u.pMat, pCol[0], pCol[1], pCol[2], state.Pyramid.refl);
-            gl.uniform4f(u.pProps, state.Pyramid.rough, state.Pyramid.transp, state.Pyramid.ior, 0.0);
-
-            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-            requestAnimationFrame(render);
-        }
-        render();
-    </script>
+/* =================== PARALLAX HERO BG TEXT =================== */
+function initParallax() {
+  if (reducedMotion || isTouch) return;
+  const bgText = document.querySelector('.hero__bg-text');
+  if (!bgText) return;
+  
+  addEventListener('scroll', () => {
+    const y = window.scrollY;
+    if (y < window.innerHeight * 1.5) {
+      bgText.style.transform = `translateY(${y * 0.15}px)`;
+    }
+  }, { passive: true });
+}
+initParallax();
+</script>
 </body>
 </html>
